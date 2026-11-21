@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaService - Cuentas por Cobrar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.min.js"></script>
+    <!-- UTILIDADES DE FECHA - ZONA HORARIA CARACAS -->
+    <script src="date-utils.js"></script>
+
+    <!-- Toastify CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <!-- Toastify JS -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+    <!-- SweetAlert2 CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- jsPDF + AutoTable (Exportar PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <!-- ExcelJS (Exportar Excel) -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .sidebar-mobile {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .sidebar-mobile.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 39;
+        }
+
+        .sidebar-overlay.show {
+            display: block;
+        }
+
+        @media (min-width: 1024px) {
+            .sidebar-mobile {
+                transform: translateX(0) !important;
+            }
+
+            .sidebar-overlay {
+                display: none !important;
+            }
+
+            .menu-toggle {
+                display: none !important;
+            }
+        }
+
+        .toastify {
+            font-family: 'Inter', sans-serif !important;
+            font-weight: 500 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15) !important;
+            padding: 14px 20px !important;
+            min-width: 280px;
+            font-size: 14px !important;
+            color: white !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+
+        .toastify-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        }
+
+        .toastify-error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+        }
+
+        .toastify-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        }
+
+        .toastify-info {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        }
+
+        .swal2-popup {
+            font-family: 'Inter', sans-serif !important;
+            border-radius: 16px !important;
+            padding: 2rem !important;
+        }
+
+        .swal2-title {
+            font-size: 1.5rem !important;
+            font-weight: 700 !important;
+            color: #1f2937 !important;
+        }
+
+        .swal2-html-container {
+            font-size: 0.95rem !important;
+            color: #4b5563 !important;
+        }
+
+        .swal2-confirm {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%) !important;
+            border: none !important;
+            border-radius: 12px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3) !important;
+            transition: all 0.2s !important;
+        }
+
+        .swal2-confirm:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4) !important;
+        }
+
+        .swal2-cancel {
+            background: #f3f4f6 !important;
+            color: #4b5563 !important;
+            border: none !important;
+            border-radius: 12px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+            transition: all 0.2s !important;
+        }
+
+        .swal2-cancel:hover {
+            background: #e5e7eb !important;
+            transform: translateY(-2px) !important;
+        }
+
+        @keyframes pulse-bcv {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+            }
+        }
+
+        .btn-bcv-pulse {
+            animation: pulse-bcv 2s infinite;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50" x-data="cuentasApp()" x-init="initCuentas()">
+
+    <!-- Overlay para móvil -->
+    <div class="sidebar-overlay" :class="{ 'show': mobileMenuOpen }" @click="mobileMenuOpen = false"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar-mobile fixed left-0 top-0 h-full w-64 gradient-bg text-white z-40 lg:block"
+        :class="{ 'open': mobileMenuOpen }">
+        <div class="p-6">
+            <div class="mb-6">
+                <div class="flex items-center space-x-3 mb-3">
+                    <i class="fas fa-tint text-3xl"></i>
+                    <div>
+                        <h1 class="text-xl font-bold">Servicios Agua Potable</h1>
+                        <p class="text-xs text-blue-200">Sistema de Gestión</p>
+                    </div>
+                </div>
+                <div class="bg-white bg-opacity-10 rounded-lg px-3 py-2">
+                    <p class="text-xs text-blue-200 mb-0.5">Sucursal</p>
+                    <p class="font-semibold capitalize text-sm" x-text="userBranch || 'Cargando...'"></p>
+                </div>
+            </div>
+
+            <nav class="space-y-2">
+                <a href="index.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-home w-5"></i><span>Dashboard</span></a>
+                <a href="ventas.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-shopping-cart w-5"></i><span>Ventas</span></a>
+                <a href="cuentas-cobrar.html"
+                    class="flex items-center space-x-3 px-4 py-3 bg-white bg-opacity-20 rounded-lg"><i
+                        class="fas fa-file-invoice-dollar w-5"></i><span class="font-medium">Cuentas por
+                        Cobrar</span></a>
+                <a href="clientes.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-users w-5"></i><span>Clientes</span></a>
+                <a href="inventario.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-boxes w-5"></i><span>Inventario</span></a>
+                <a href="gastos.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-receipt w-5"></i><span>Gastos</span></a>
+                <a href="usuarios.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-user-cog w-5"></i><span>Usuarios</span></a>
+                <a href="reportes.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-chart-line w-5"></i><span>Reportes</span></a>
+                <a href="resumen-diario.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-file-alt w-5"></i><span>Resumen Diario</span></a>
+            </nav>
+        </div>
+
+        <div class="absolute bottom-0 left-0 right-0 p-4 bg-black bg-opacity-20">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full bg-white bg-opacity-20 flex items-center justify-center font-bold"
+                    x-text="userInitials"></div>
+                <div>
+                    <p class="text-sm font-medium" x-text="userName || 'Usuario'"></p>
+                    <p class="text-xs text-blue-200 capitalize" x-text="userRole || 'Cargando...'"></p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="lg:ml-64 min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <button @click="mobileMenuOpen = !mobileMenuOpen"
+                    class="menu-toggle lg:hidden text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Cuentas por Cobrar</h2>
+                    <p class="text-sm text-gray-500"
+                        x-text="'Gestión de créditos y pagos pendientes - ' + DateUtils.formatDateLong(new Date())"></p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <!-- Dropdown de Sucursales (Solo Admin) -->
+                <div x-show="userRole === 'admin'" class="hidden md:block">
+                    <select x-model="selectedBranch" @change="loadCuentas()"
+                        class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm">
+                        <option value="all">🌐 Todas las Sucursales (Consolidado)</option>
+                        <template x-for="branch in availableBranches" :key="branch">
+                            <option :value="branch" x-text="branch.charAt(0).toUpperCase() + branch.slice(1)"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div class="hidden md:flex items-center bg-blue-50 px-4 py-2 rounded-lg">
+                    <i class="fas fa-exchange-alt text-blue-600 mr-2"></i>
+                    <span class="text-sm text-gray-600">Tasa: </span>
+                    <span class="text-sm font-bold text-blue-600 ml-1" x-text="'Bs. ' + exchangeRate.toFixed(2)"></span>
+                </div>
+                <button @click="fetchAndUpdateBCV()"
+                    class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold btn-bcv-pulse"
+                    title="Obtener tasa oficial BCV">
+                    <i class="fas fa-landmark mr-1"></i>BCV
+                </button>
+                <button @click="loadCuentas()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                    <i class="fas fa-sync-alt mr-2"></i>Actualizar
+                </button>
+                <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
+                    <i class="fas fa-sign-out-alt mr-2"></i>Salir
+                </button>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="p-6">
+            <div x-show="loading" class="text-center py-12">
+                <i class="fas fa-circle-notch fa-spin text-4xl text-blue-500"></i>
+                <p class="mt-4 text-gray-600">Cargando cuentas...</p>
+            </div>
+
+            <div x-show="!loading">
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-red-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Total por Cobrar</p>
+                                <p class="text-3xl font-bold text-gray-900" x-text="'$' + stats.totalCredit.toFixed(2)">
+                                </p>
+                                <p class="text-xs text-gray-500 mt-1"
+                                    x-text="'Bs. ' + (stats.totalCredit * exchangeRate).toFixed(2)"></p>
+                                <p class="text-xs text-gray-500 mt-2" x-text="stats.totalAccounts + ' cuentas'"></p>
+                            </div>
+                            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-dollar-sign text-red-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-yellow-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Cuentas Vencidas</p>
+                                <p class="text-3xl font-bold text-gray-900"
+                                    x-text="'$' + stats.overdueAmount.toFixed(2)"></p>
+                                <p class="text-xs text-gray-500 mt-1"
+                                    x-text="'Bs. ' + (stats.overdueAmount * exchangeRate).toFixed(2)"></p>
+                                <p class="text-xs text-yellow-600 mt-2">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <span x-text="stats.overdueAccounts + ' vencidas'"></span>
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-exclamation-triangle text-yellow-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-blue-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Cuentas Pendientes</p>
+                                <p class="text-3xl font-bold text-gray-900"
+                                    x-text="'$' + stats.pendingAmount.toFixed(2)"></p>
+                                <p class="text-xs text-gray-500 mt-1"
+                                    x-text="'Bs. ' + (stats.pendingAmount * exchangeRate).toFixed(2)"></p>
+                                <p class="text-xs text-blue-600 mt-2" x-text="stats.pendingAccounts + ' pendientes'">
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-clock text-blue-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-green-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Cuentas Canceladas</p>
+                                <p class="text-3xl font-bold text-gray-900" x-text="stats.paidAccounts"></p>
+                                <p class="text-xs text-green-600 mt-2">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>Este mes</span>
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="bg-white rounded-2xl shadow-sm p-4 mb-6">
+                    <div class="flex flex-col md:flex-row md:items-end md:space-x-4 space-y-3 md:space-y-0">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+                            <input type="text" x-model="filters.search" @input="filterCuentas()"
+                                placeholder="Cliente o cédula..."
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                            <select x-model="filters.status" @change="filterCuentas()"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Todos</option>
+                                <option value="pending">Pendiente</option>
+                                <option value="partial">Parcial</option>
+                                <option value="paid">Cancelado</option>
+                                <option value="overdue">Vencido</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
+                            <select x-model="filters.dateFilter" @change="filterCuentas()"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Todas</option>
+                                <option value="overdue">Vencidas</option>
+                                <option value="today">Hoy</option>
+                                <option value="week">Esta semana</option>
+                                <option value="month">Este mes</option>
+                            </select>
+                        </div>
+                        <button @click="resetFilters()"
+                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 whitespace-nowrap">
+                            <i class="fas fa-undo mr-2"></i>Limpiar Filtros
+                        </button>
+                        <button @click="exportarPDF()"
+                            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 whitespace-nowrap">
+                            <i class="fas fa-file-pdf mr-2"></i>PDF
+                        </button>
+                        <button @click="exportarExcel()"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 whitespace-nowrap">
+                            <i class="fas fa-file-excel mr-2"></i>Excel
+                        </button>
+                    </div>
+                    <div class="mt-3 flex items-center text-xs text-gray-500" x-show="!loading">
+                        <i class="fas fa-list-ol mr-1.5"></i>
+                        <span>Mostrando <strong x-text="filteredCuentas.length"></strong> de <strong
+                                x-text="cuentas.length"></strong> cuentas</span>
+                        <span x-show="filteredCuentas.length < cuentas.length"
+                            class="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-semibold">
+                            <i class="fas fa-filter mr-1"></i>Filtrado
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th
+                                        class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        #</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Cliente</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Teléfono</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Total</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Pagado</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Pendiente</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Fecha Registro</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Fecha Límite</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Estado</th>
+                                    <template x-if="filters.status === 'paid'">
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Fecha de Cancelación</th>
+                                    </template>
+                                    <th
+                                        class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                <template x-for="(account, index) in filteredCuentas" :key="account.id">
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-4 text-center">
+                                            <span class="text-sm font-semibold text-gray-500" x-text="index + 1"></span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex flex-col">
+                                                <span class="text-sm font-medium text-gray-900"
+                                                    x-text="account.customer_name"></span>
+                                                <span class="text-xs text-gray-500"
+                                                    x-text="account.customer_id_card || 'Sin cédula'"></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span class="text-sm text-gray-900"
+                                                x-text="account.customer_phone || 'Sin teléfono'"></span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex flex-col">
+                                                <span class="text-sm font-semibold text-gray-900"
+                                                    x-text="'$' + account.total_amount.toFixed(2)"></span>
+                                                <span class="text-xs text-gray-500"
+                                                    x-text="'Bs. ' + (account.total_amount * exchangeRate).toFixed(2)"></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex flex-col">
+                                                <span class="text-sm text-green-600 font-medium"
+                                                    x-text="'$' + account.paid_amount.toFixed(2)"></span>
+                                                <span class="text-xs text-gray-500"
+                                                    x-text="'Bs. ' + (account.paid_amount * exchangeRate).toFixed(2)"></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex flex-col">
+                                                <span class="text-sm font-bold text-red-600"
+                                                    x-text="'$' + account.remaining_amount.toFixed(2)"></span>
+                                                <span class="text-xs text-gray-500"
+                                                    x-text="'Bs. ' + (account.remaining_amount * exchangeRate).toFixed(2)"></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span class="text-sm text-gray-900"
+                                                x-text="formatDateTime(account.created_at)"></span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span class="text-sm text-gray-900"
+                                                x-text="formatDate(account.payment_date)"></span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span
+                                                class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                                :class="{
+                                                    'bg-red-100 text-red-800': isOverdue(account),
+                                                    'bg-yellow-100 text-yellow-800': account.status === 'partial',
+                                                    'bg-blue-100 text-blue-800': account.status === 'pending' && !isOverdue(account),
+                                                    'bg-green-100 text-green-800': account.status === 'paid'
+                                                }" x-text="getStatusText(account)"></span>
+                                        </td>
+                                        <template x-if="filters.status === 'paid'">
+                                            <td class="px-6 py-4">
+                                                <span class="text-sm text-gray-900"
+                                                    x-text="getCancellationDate(account)"></span>
+                                            </td>
+                                        </template>
+                                        <td class="px-6 py-4 text-right">
+                                            <button @click="viewAccount(account)"
+                                                class="text-blue-600 hover:text-blue-900 font-medium text-sm">
+                                                <i class="fas fa-eye mr-1"></i>Ver
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+
+                                <!-- Empty State -->
+                                <tr x-show="filteredCuentas.length === 0">
+                                    <td colspan="10" class="px-6 py-12 text-center text-gray-500">
+                                        <i class="fas fa-inbox text-4xl mb-3 text-gray-300"></i>
+                                        <p class="text-lg font-medium">No se encontraron cuentas</p>
+                                        <p class="text-sm mt-1">Intenta ajustar los filtros de búsqueda</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Ver Detalles -->
+    <div x-show="showViewModal" x-cloak class="modal-overlay" @click.self="showViewModal = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
+                <h3 class="text-xl font-bold text-gray-800">Detalles de Cuenta</h3>
+                <button @click="showViewModal = false" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-6" x-show="selectedAccount">
+                <div class="bg-blue-50 rounded-xl p-4">
+                    <h4 class="font-semibold text-blue-900 mb-3"><i class="fas fa-user mr-2"></i>Información del Cliente
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-xs text-gray-600">Nombre:</p>
+                            <p class="text-sm font-medium" x-text="selectedAccount.customer_name"></p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">Teléfono:</p>
+                            <p class="text-sm font-medium" x-text="selectedAccount.customer_phone || 'No registrado'">
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">Cédula/ID:</p>
+                            <p class="text-sm font-medium" x-text="selectedAccount.customer_id_card || 'No registrado'">
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-green-50 rounded-xl p-4">
+                    <h4 class="font-semibold text-green-900 mb-3"><i class="fas fa-dollar-sign mr-2"></i>Información
+                        Financiera</h4>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Monto Total:</span>
+                            <div class="text-right">
+                                <p class="text-lg font-bold text-gray-900"
+                                    x-text="'$' + selectedAccount.total_amount.toFixed(2)"></p>
+                                <p class="text-xs text-gray-500"
+                                    x-text="'Bs. ' + (selectedAccount.total_amount * exchangeRate).toFixed(2)"></p>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Pagado:</span>
+                            <div class="text-right">
+                                <p class="text-lg font-bold text-green-600"
+                                    x-text="'$' + selectedAccount.paid_amount.toFixed(2)"></p>
+                                <p class="text-xs text-gray-500"
+                                    x-text="'Bs. ' + (selectedAccount.paid_amount * exchangeRate).toFixed(2)"></p>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center pt-3 border-t border-green-200">
+                            <span class="text-sm font-semibold text-gray-700">Pendiente:</span>
+                            <div class="text-right">
+                                <p class="text-2xl font-bold text-red-600"
+                                    x-text="'$' + selectedAccount.remaining_amount.toFixed(2)"></p>
+                                <p class="text-xs text-gray-500"
+                                    x-text="'Bs. ' + (selectedAccount.remaining_amount * exchangeRate).toFixed(2)"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-yellow-50 rounded-xl p-4">
+                    <h4 class="font-semibold text-yellow-900 mb-3"><i class="fas fa-calendar-alt mr-2"></i>Términos del
+                        Crédito</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-xs text-gray-600">Fecha de Registro:</p>
+                            <p class="text-sm font-medium" x-text="formatDateTime(selectedAccount.created_at)"></p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">Fecha Límite:</p>
+                            <p class="text-sm font-medium" x-text="formatDate(selectedAccount.payment_date)"></p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">Condiciones:</p>
+                            <p class="text-sm font-medium" x-text="selectedAccount.payment_terms || 'No especificadas'">
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="selectedAccount.notes">
+                    <h4 class="font-semibold text-gray-800 mb-2"><i class="fas fa-sticky-note mr-2"></i>Notas</h4>
+                    <p class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg" x-text="selectedAccount.notes"></p>
+                </div>
+
+                <div x-show="selectedAccount.sale_id">
+                    <h4 class="font-semibold text-gray-800 mb-3"><i class="fas fa-box mr-2"></i>Productos de la Venta
+                    </h4>
+                    <div x-show="accountItems.length === 0" class="text-center py-6 text-gray-400">
+                        <i class="fas fa-box-open text-3xl mb-2"></i>
+                        <p class="text-sm">No se encontraron productos</p>
+                    </div>
+                    <div class="space-y-2" x-show="accountItems.length > 0">
+                        <template x-for="item in accountItems" :key="item.id">
+                            <div class="bg-purple-50 rounded-lg p-3 flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm font-medium"
+                                        x-text="(item.products?.name || 'Producto') + (item.products?.size_liters ? ' (' + item.products.size_liters + 'L)' : '')">
+                                    </p>
+                                    <p class="text-xs text-gray-500"
+                                        x-text="item.quantity + ' x $' + item.unit_price.toFixed(2)"></p>
+                                </div>
+                                <span class="text-sm font-semibold text-purple-900"
+                                    x-text="'$' + item.total.toFixed(2)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-3"><i class="fas fa-history mr-2"></i>Historial de Pagos
+                    </h4>
+                    <div x-show="accountPayments.length === 0" class="text-center py-6 text-gray-400">
+                        <i class="fas fa-receipt text-3xl mb-2"></i>
+                        <p class="text-sm">No hay pagos registrados</p>
+                    </div>
+                    <div class="space-y-2" x-show="accountPayments.length > 0">
+                        <template x-for="payment in accountPayments" :key="payment.id">
+                            <div class="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm font-medium"
+                                        x-text="'$' + payment.amount.toFixed(2) + ' - ' + payment.payment_method"></p>
+                                    <p class="text-xs text-gray-500" x-text="formatDate(payment.payment_date)"></p>
+                                </div>
+                                <span class="text-xs text-green-600 font-medium"
+                                    x-text="'Bs. ' + (payment.amount * exchangeRate).toFixed(2)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t bg-gray-50 flex justify-end space-x-3 sticky bottom-0">
+                <button @click="showViewModal = false"
+                    class="px-4 py-2 text-gray-600 hover:text-gray-800">Cerrar</button>
+                <button @click="openPaymentModal(selectedAccount)"
+                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                    <i class="fas fa-money-bill-wave mr-2"></i>Registrar Pago
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Registrar Pago -->
+    <div x-show="showPaymentModal" x-cloak class="modal-overlay" @click.self="closePaymentModal()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">Registrar Pago</h3>
+                <button @click="closePaymentModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Cliente:</label>
+                    <p class="text-lg font-semibold text-gray-900" x-text="selectedAccount?.customer_name"></p>
+                </div>
+
+                <div class="bg-blue-50 rounded-lg p-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Pendiente:</span>
+                        <div class="text-right">
+                            <p class="text-lg font-bold text-blue-600"
+                                x-text="'$' + (selectedAccount?.remaining_amount || 0).toFixed(2)"></p>
+                            <p class="text-xs text-gray-500"
+                                x-text="'Bs. ' + ((selectedAccount?.remaining_amount || 0) * exchangeRate).toFixed(2)">
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Monto del Pago *</label>
+                    <input type="number" x-model.number="paymentForm.amount" @input="updatePaymentNote()" step="0.01"
+                        min="0.01" :max="selectedAccount?.remaining_amount"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <p class="text-xs text-gray-500 mt-1" x-show="paymentForm.amount > 0">
+                        Equivalente: Bs. <span x-text="formatVE(paymentForm.amount * exchangeRate)"></span>
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Método de Pago *</label>
+                    <select x-model="paymentForm.payment_method" @change="onPaymentMethodChange()"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="pago_movil">Pago Móvil</option>
+                        <option value="punto_venta">Punto de Venta</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1"
+                        x-show="paymentForm.payment_method !== 'efectivo' && paymentForm.amount > 0">
+                        <i class="fas fa-exchange-alt mr-1"></i>
+                        Se pagará en bolívares a la tasa del día: <strong>Bs.
+                            <span x-text="formatVE(paymentForm.amount * exchangeRate)"></span></strong>
+                    </p>
+                </div>
+
+                <div x-show="paymentForm.payment_method !== 'efectivo'" x-cloak>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Referencia</label>
+                    <input type="text" x-model="paymentForm.reference"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Número de referencia">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Notas</label>
+                    <textarea x-model="paymentForm.notes" @input="paymentNotesAuto = false" rows="2"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Notas adicionales"></textarea>
+                    <p class="text-xs text-gray-400 mt-1"
+                        x-show="paymentForm.payment_method !== 'efectivo' && paymentNotesAuto">
+                        <i class="fas fa-magic mr-1"></i>Nota generada automáticamente. Puedes editarla.
+                    </p>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t bg-gray-50 flex justify-end space-x-3">
+                <button @click="closePaymentModal()"
+                    class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancelar</button>
+                <button @click="registerPayment()" :disabled="!canRegisterPayment() || processing"
+                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-save mr-2" x-show="!processing"></i>
+                    <i class="fas fa-circle-notch fa-spin mr-2" x-show="processing"></i>
+                    <span x-text="processing ? 'Procesando...' : 'Registrar'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://wotoslngwrsddohowkba.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvdG9zbG5nd3JzZGRvaG93a2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMDk5MTksImV4cCI6MjA5ODc4NTkxOX0.zvce9AmOBwPxmtOikfyT0FdbyGF0Szec-AZfTiYqzBs';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function logout() {
+            await supabase.auth.signOut();
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        function showToast(message, type = 'success') {
+            const gradients = {
+                success: 'linear-gradient(to right, #10b981, #059669)',
+                error: 'linear-gradient(to right, #ef4444, #dc2626)',
+                warning: 'linear-gradient(to right, #f59e0b, #d97706)',
+                info: 'linear-gradient(to right, #3b82f6, #2563eb)'
+            };
+            const icons = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
+            Toastify({
+                text: `${icons[type]} ${message}`,
+                duration: 3000, close: true, gravity: 'top', position: 'right', stopOnFocus: true,
+                style: {
+                    background: gradients[type], borderRadius: '12px', fontFamily: 'Inter, sans-serif',
+                    fontWeight: '500', fontSize: '14px', padding: '14px 20px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)', minWidth: '280px'
+                }
+            }).showToast();
+        }
+
+        // ============================================
+        // TRUNCAR A 2 DECIMALES (Evita que 723.999 se convierta en 724.00)
+        // ============================================
+        function round2(num) {
+            if (num === null || num === undefined || isNaN(num)) return 0;
+            return Math.floor(parseFloat(num) * 100) / 100;
+        }
+
+        function ensureValidRate(rate) {
+            const parsed = parseFloat(rate);
+            if (isNaN(parsed) || parsed <= 0) {
+                console.warn('⚠️ Tasa inválida detectada, usando valor por defecto 700.22');
+                return 700.22;
+            }
+            return round2(parsed);
+        }
+
+        async function fetchBCVRate() {
+            try {
+                console.log('🏛️ Consultando tasa BCV desde API oficial...');
+                const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                const rate = round2(parseFloat(data.promedio));
+                if (isNaN(rate) || rate <= 0) throw new Error('Tasa inválida recibida de la API');
+                console.log('✅ Tasa BCV obtenida:', rate);
+                console.log('📅 Fecha actualización:', data.fechaActualizacion);
+                return { rate: rate, date: data.fechaActualizacion, source: 'BCV Oficial' };
+            } catch (err) {
+                console.error('❌ Error obteniendo tasa BCV:', err);
+                return null;
+            }
+        }
+
+        function cuentasApp() {
+            return {
+                mobileMenuOpen: false,
+                currentPage: 'cuentas',
+                cuentas: [],
+                filteredCuentas: [],
+                loading: true,
+                processing: false,
+                showViewModal: false,
+                showPaymentModal: false,
+                selectedAccount: null,
+                accountPayments: [],
+                accountItems: [],
+                userName: '',
+                userRole: '',
+                userBranch: '',
+                userInitials: '??',
+                exchangeRate: 700.22,
+
+                // ✅ Control de sucursales (Consolidado para admin)
+                selectedBranch: 'all',
+                availableBranches: [],
+
+                stats: {
+                    totalCredit: 0, totalAccounts: 0, overdueAmount: 0,
+                    overdueAccounts: 0, pendingAmount: 0, pendingAccounts: 0, paidAccounts: 0
+                },
+                // ✅ Filtro por defecto: "Pendiente" al abrir el módulo (el usuario puede cambiarlo libremente)
+                filters: { search: '', status: 'pending', dateFilter: '' },
+                // ✅ Caché: { credit_account_id: fecha_ultimo_pago } tomada de credit_payments.payment_date
+                cancellationDates: {},
+                paymentForm: { amount: 0, payment_method: 'efectivo', reference: '', notes: '' },
+                paymentNotesAuto: true,
+
+                async initCuentas() {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) { window.location.href = 'login.html'; return; }
+
+                    try {
+                        const { data: profile } = await supabase.from('profiles').select('full_name, role, branch').eq('id', session.user.id).single();
+                        if (profile) {
+                            this.userName = profile.full_name;
+                            this.userRole = profile.role;
+                            this.userBranch = profile.branch;
+                            this.userInitials = this.getInitials(profile.full_name);
+
+                            // ✅ CONSOLIDADO POR DEFECTO PARA ADMIN, SUCURSAL PARA VENDEDORES
+                            this.selectedBranch = (profile.role === 'admin') ? 'all' : profile.branch;
+                        }
+
+                        if (this.userRole === 'admin') {
+                            await this.loadAvailableBranches();
+                        }
+
+                        await this.loadExchangeRate();
+                        await this.loadCuentas();
+                    } catch (err) {
+                        console.error('Error inicializando:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async loadAvailableBranches() {
+                    try {
+                        const { data, error } = await supabase.from('profiles').select('branch').not('branch', 'is', null);
+                        if (!error && data) {
+                            this.availableBranches = [...new Set(data.map(p => p.branch))];
+                        }
+                    } catch (err) {
+                        console.error('Error cargando sucursales:', err);
+                    }
+                },
+
+                async loadExchangeRate() {
+                    try {
+                        const { data, error } = await supabase.rpc('get_active_exchange_rate');
+                        if (!error && data) {
+                            this.exchangeRate = ensureValidRate(data);
+                        } else {
+                            this.exchangeRate = 700.22;
+                        }
+                    } catch (err) {
+                        this.exchangeRate = 700.22;
+                    }
+                },
+
+                async fetchAndUpdateBCV() {
+                    showToast('Consultando tasa BCV oficial...', 'info');
+                    const bcvData = await fetchBCVRate();
+                    if (!bcvData) {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo obtener la tasa del BCV. Verifica tu conexión a internet.', confirmButtonText: 'Entendido' });
+                        return;
+                    }
+                    const newRate = round2(bcvData.rate);
+                    const rateDate = DateUtils.formatDateLong(bcvData.date);
+                    const confirmed = await Swal.fire({
+                        title: '🏛️ Tasa BCV Oficial',
+                        html: `<div class="text-center space-y-3">
+                            <div class="bg-blue-50 rounded-lg p-4">
+                                <p class="text-sm text-gray-600 mb-2">Tasa oficial del BCV:</p>
+                                <p class="text-4xl font-bold text-blue-600">Bs. ${newRate.toFixed(2)}</p>
+                                <p class="text-xs text-gray-500 mt-2"><i class="fas fa-calendar mr-1"></i>Actualizada: ${rateDate}</p>
+                            </div>
+                            <div class="bg-yellow-50 rounded-lg p-3">
+                                <p class="text-xs text-gray-700"><i class="fas fa-info-circle mr-1"></i>Tasa actual en el sistema: <strong>Bs. ${this.exchangeRate.toFixed(2)}</strong></p>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Fuente: ${bcvData.source}</p>
+                        </div>`,
+                        icon: 'question', showCancelButton: true, confirmButtonText: 'Aplicar Tasa', cancelButtonText: 'Cancelar', reverseButtons: true
+                    });
+                    if (confirmed.isConfirmed) {
+                        this.exchangeRate = newRate;
+                        await this.updateExchangeRate();
+                        showToast(`✅ Tasa BCV aplicada: Bs. ${newRate.toFixed(2)}`, 'success');
+                    }
+                },
+
+                async updateExchangeRate() {
+                    try {
+                        const validRate = round2(ensureValidRate(this.exchangeRate));
+                        this.exchangeRate = validRate;
+                        await supabase.from('exchange_rates').update({ is_active: false }).eq('is_active', true);
+                        await supabase.from('exchange_rates').insert({ rate: validRate, is_active: true });
+                        showToast('Tasa actualizada en Supabase', 'success');
+                    } catch (err) {
+                        console.error('Error actualizando tasa:', err);
+                        showToast('Error al actualizar tasa', 'error');
+                    }
+                },
+
+                async loadCuentas() {
+                    this.loading = true;
+                    try {
+                        let query = supabase.from('credit_accounts').select('*').order('created_at', { ascending: false });
+
+                        // ✅ FILTRAR POR SUCURSAL SI NO ES 'all'
+                        if (this.selectedBranch !== 'all') {
+                            query = query.eq('branch', this.selectedBranch);
+                        }
+
+                        const { data, error } = await query;
+                        if (error) throw error;
+
+                        this.cuentas = data || [];
+                        this.filterCuentas();
+                    } catch (err) {
+                        console.error('Error cargando cuentas:', err);
+                        showToast('Error al cargar cuentas: ' + err.message, 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                // ✅ Obtiene, desde credit_payments, la fecha del último pago (payment_date) de cada
+                // cuenta indicada — esa es la "Fecha de Cancelación" cuando la cuenta quedó en 'paid'.
+                // Solo consulta lo que falte en caché (this.cancellationDates), para no repetir llamadas.
+                async loadCancellationDates(accounts) {
+                    try {
+                        const ids = [...new Set((accounts || []).map(a => a.id))];
+                        const faltantes = ids.filter(id => !(id in this.cancellationDates));
+                        if (faltantes.length === 0) return;
+
+                        const { data, error } = await supabase
+                            .from('credit_payments')
+                            .select('credit_account_id, payment_date')
+                            .in('credit_account_id', faltantes)
+                            .order('payment_date', { ascending: false });
+                        if (error) throw error;
+
+                        const nuevo = { ...this.cancellationDates };
+                        faltantes.forEach(id => { if (!(id in nuevo)) nuevo[id] = null; });
+                        (data || []).forEach(p => {
+                            // Al venir ordenado descendente, el primer registro por cuenta es el más reciente
+                            if (!nuevo[p.credit_account_id]) nuevo[p.credit_account_id] = p.payment_date;
+                        });
+                        this.cancellationDates = nuevo;
+                    } catch (err) {
+                        console.error('Error cargando fechas de cancelación:', err);
+                    }
+                },
+
+                // ✅ Calcula las estadísticas de encabezado sobre el conjunto de datos que se le pase
+                // (se usa con filteredCuentas para que las tarjetas reflejen el filtro/búsqueda activos)
+                calculateStats(dataset) {
+                    const data = dataset || this.cuentas;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    this.stats.totalCredit = data.reduce((sum, c) => sum + c.remaining_amount, 0);
+                    this.stats.totalAccounts = data.length;
+                    const overdue = data.filter(c => {
+                        const paymentDate = new Date(c.payment_date);
+                        return c.status !== 'paid' && paymentDate < today;
+                    });
+                    this.stats.overdueAccounts = overdue.length;
+                    this.stats.overdueAmount = overdue.reduce((sum, c) => sum + c.remaining_amount, 0);
+                    this.stats.pendingAccounts = data.filter(c => c.status === 'pending').length;
+                    this.stats.pendingAmount = data.filter(c => c.status === 'pending').reduce((sum, c) => sum + c.remaining_amount, 0);
+                    const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                    this.stats.paidAccounts = data.filter(c => {
+                        const createdAt = new Date(c.created_at);
+                        return c.status === 'paid' && createdAt >= thisMonth;
+                    }).length;
+                },
+
+                filterCuentas() {
+                    let filtered = [...this.cuentas];
+                    if (this.filters.search) {
+                        const search = this.filters.search.toLowerCase();
+                        filtered = filtered.filter(c => c.customer_name.toLowerCase().includes(search) || (c.customer_id_card && c.customer_id_card.toLowerCase().includes(search)));
+                    }
+                    if (this.filters.status) {
+                        if (this.filters.status === 'overdue') {
+                            const today = new Date(); today.setHours(0, 0, 0, 0);
+                            filtered = filtered.filter(c => {
+                                const paymentDate = new Date(c.payment_date);
+                                return c.status !== 'paid' && paymentDate < today;
+                            });
+                        } else {
+                            filtered = filtered.filter(c => c.status === this.filters.status);
+                        }
+                    }
+                    if (this.filters.dateFilter) {
+                        const today = new Date(); today.setHours(0, 0, 0, 0);
+                        if (this.filters.dateFilter === 'overdue') {
+                            filtered = filtered.filter(c => {
+                                const paymentDate = new Date(c.payment_date);
+                                return c.status !== 'paid' && paymentDate < today;
+                            });
+                        } else if (this.filters.dateFilter === 'today') {
+                            filtered = filtered.filter(c => new Date(c.payment_date).toDateString() === today.toDateString());
+                        } else if (this.filters.dateFilter === 'week') {
+                            const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 7);
+                            filtered = filtered.filter(c => new Date(c.payment_date) >= weekAgo);
+                        } else if (this.filters.dateFilter === 'month') {
+                            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                            filtered = filtered.filter(c => new Date(c.payment_date) >= monthStart);
+                        }
+                    }
+                    this.filteredCuentas = filtered;
+                    // ✅ Se ordena mostrando siempre el registro más reciente primero
+                    this.filteredCuentas.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    // ✅ Las tarjetas de encabezado se recalculan según lo que está filtrado/buscado
+                    this.calculateStats(filtered);
+                    // ✅ Si el filtro activo es "Cancelado", carga (en segundo plano) la fecha de
+                    // cancelación de las cuentas visibles, tomada de credit_payments
+                    if (this.filters.status === 'paid') {
+                        this.loadCancellationDates(this.filteredCuentas);
+                    }
+                },
+
+                resetFilters() {
+                    this.filters = { search: '', status: '', dateFilter: '' };
+                    this.filterCuentas();
+                },
+
+                // ============================================
+                // 📄 EXPORTAR PDF (respeta filtros/búsqueda activos)
+                // ============================================
+                async exportarPDF() {
+                    const datos = this.filteredCuentas;
+                    if (!datos || datos.length === 0) {
+                        Swal.fire('Atención', 'No hay cuentas para generar el reporte', 'warning');
+                        return;
+                    }
+                    try {
+                        // ✅ Si se va a incluir "Fecha de Cancelación", asegura tener las fechas cargadas
+                        if (this.filters.status === 'paid') {
+                            await this.loadCancellationDates(datos);
+                        }
+                        const { jsPDF } = window.jspdf;
+                        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+
+                        const filtrosTexto = [];
+                        if (this.filters.search) filtrosTexto.push(`Búsqueda: "${this.filters.search}"`);
+                        if (this.filters.status) filtrosTexto.push(`Estado: ${this.filters.status}`);
+                        if (this.filters.dateFilter) filtrosTexto.push(`Fecha: ${this.filters.dateFilter}`);
+                        const filtrosAplicados = filtrosTexto.length > 0 ? filtrosTexto.join(' | ') : 'Ninguno (todas las cuentas)';
+
+                        const fechaGeneracion = DateUtils.formatDateLong(new Date());
+                        const stats = {
+                            totalCredit: datos.reduce((s, c) => s + c.remaining_amount, 0),
+                            totalAccounts: datos.length
+                        };
+
+                        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+                        doc.text('SERVICIOS AGUA POTABLE', 148, 15, { align: 'center' });
+                        doc.setFontSize(11);
+                        doc.text('REPORTE DE CUENTAS POR COBRAR', 148, 21, { align: 'center' });
+                        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+                        doc.text(`Generado: ${fechaGeneracion}`, 148, 26, { align: 'center' });
+                        doc.setFont('helvetica', 'italic');
+                        doc.text(`Filtros: ${filtrosAplicados}`, 148, 30, { align: 'center' });
+
+                        doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+                        doc.text(
+                            `Cuentas: ${stats.totalAccounts}   |   Total por Cobrar: $${stats.totalCredit.toFixed(2)} (Bs. ${this.formatVE(stats.totalCredit * this.exchangeRate)})   |   Tasa: Bs. ${this.exchangeRate.toFixed(2)}`,
+                            148, 36, { align: 'center' }
+                        );
+
+                        // ✅ La columna "Fecha de Cancelación" solo se incluye si el filtro activo es "Cancelado" (paid)
+                        const esCancelado = this.filters.status === 'paid';
+                        const head = [['#', 'Cliente', 'Cédula', 'Teléfono', 'Total $', 'Pagado $', 'Pendiente $', 'Pendiente Bs.', 'Fecha Registro', 'Fecha Límite', 'Estado', ...(esCancelado ? ['Fecha de Cancelación'] : [])]];
+                        const body = datos.map((c, idx) => [
+                            (idx + 1).toString(),
+                            c.customer_name || '-',
+                            c.customer_id_card || '-',
+                            c.customer_phone || '-',
+                            c.total_amount.toFixed(2),
+                            c.paid_amount.toFixed(2),
+                            c.remaining_amount.toFixed(2),
+                            this.formatVE(c.remaining_amount * this.exchangeRate),
+                            this.formatDateTime(c.created_at),
+                            this.formatDate(c.payment_date),
+                            this.getStatusText(c),
+                            ...(esCancelado ? [this.getCancellationDate(c)] : [])
+                        ]);
+
+                        doc.autoTable({
+                            head, body, startY: 41, theme: 'striped', margin: { left: 10, right: 10 },
+                            headStyles: { fillColor: [14, 165, 233], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 8 },
+                            styles: { fontSize: 7.5, cellPadding: 2, valign: 'middle' },
+                            columnStyles: {
+                                0: { halign: 'center', fontStyle: 'bold', cellWidth: 8 },
+                                4: { halign: 'right' }, 5: { halign: 'right' },
+                                6: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] },
+                                7: { halign: 'right' }, 8: { halign: 'center', fontSize: 6.5 }, 10: { halign: 'center' },
+                                ...(esCancelado ? { 11: { halign: 'center', fontSize: 6.5 } } : {})
+                            },
+                            didDrawPage: (data) => {
+                                const pageCount = doc.internal.getNumberOfPages();
+                                doc.setFontSize(7); doc.setFont('helvetica', 'italic');
+                                doc.text(`Página ${data.pageNumber} de ${pageCount}`, 148, doc.internal.pageSize.height - 8, { align: 'center' });
+                            }
+                        });
+
+                        let nombreArchivo = 'Cuentas_por_Cobrar';
+                        if (this.filters.search) nombreArchivo += `_${this.filters.search.replace(/\s+/g, '_')}`;
+                        if (this.filters.status) nombreArchivo += `_${this.filters.status}`;
+                        nombreArchivo += `_${new Date().toISOString().split('T')[0]}.pdf`;
+                        doc.save(nombreArchivo);
+
+                        showToast('PDF generado correctamente', 'success');
+                    } catch (err) {
+                        console.error('Error generando PDF:', err);
+                        showToast('Error al generar PDF: ' + err.message, 'error');
+                    }
+                },
+
+                // ============================================
+                // 📊 EXPORTAR EXCEL (respeta filtros/búsqueda activos)
+                // ============================================
+                async exportarExcel() {
+                    const datos = this.filteredCuentas;
+                    if (!datos || datos.length === 0) {
+                        Swal.fire('Atención', 'No hay cuentas para exportar', 'warning');
+                        return;
+                    }
+                    try {
+                        if (typeof ExcelJS === 'undefined') {
+                            showToast('La librería ExcelJS no está cargada', 'error');
+                            return;
+                        }
+
+                        // ✅ Si se va a incluir "Fecha de Cancelación", asegura tener las fechas cargadas
+                        if (this.filters.status === 'paid') {
+                            await this.loadCancellationDates(datos);
+                        }
+
+                        const workbook = new ExcelJS.Workbook();
+                        workbook.creator = 'Servicios Agua Potable';
+                        workbook.created = new Date();
+
+                        const colores = {
+                            azulOscuro: 'FF1E3A5F', azulClaro: 'FFB4D4F4', azulMedio: 'FF0EA5E9',
+                            azulMuyClaro: 'FFF5F9FF', rojoClaro: 'FFF8D7DA', rojoTexto: 'FF721C24',
+                            verdeClaro: 'FFD4EDDA', verdeTexto: 'FF155724', grisBorde: 'FFCCCCCC', blanco: 'FFFFFFFF'
+                        };
+                        const bordeGenerico = {
+                            top: { style: 'thin', color: { argb: colores.grisBorde } },
+                            left: { style: 'thin', color: { argb: colores.grisBorde } },
+                            bottom: { style: 'thin', color: { argb: colores.grisBorde } },
+                            right: { style: 'thin', color: { argb: colores.grisBorde } }
+                        };
+
+                        const ws = workbook.addWorksheet('Cuentas por Cobrar', {
+                            properties: { tabColor: { argb: 'FF0EA5E9' } }
+                        });
+
+                        // ✅ La columna "Fecha de Cancelación" solo se incluye si el filtro activo es "Cancelado" (paid)
+                        const esCancelado = this.filters.status === 'paid';
+                        const lastCol = esCancelado ? 'M' : 'L';
+
+                        ws.mergeCells(`A1:${lastCol}1`);
+                        ws.getCell('A1').value = '💧 SERVICIOS AGUA POTABLE - CUENTAS POR COBRAR';
+                        ws.getCell('A1').font = { name: 'Calibri', size: 14, bold: true, color: { argb: colores.blanco } };
+                        ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colores.azulMedio } };
+                        ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+                        ws.getRow(1).height = 26;
+
+                        const filtrosTexto = [];
+                        if (this.filters.search) filtrosTexto.push(`Búsqueda: "${this.filters.search}"`);
+                        if (this.filters.status) filtrosTexto.push(`Estado: ${this.filters.status}`);
+                        if (this.filters.dateFilter) filtrosTexto.push(`Fecha: ${this.filters.dateFilter}`);
+                        ws.mergeCells(`A2:${lastCol}2`);
+                        ws.getCell('A2').value = `Generado: ${DateUtils.formatDateLong(new Date())}   |   Filtros: ${filtrosTexto.length ? filtrosTexto.join(' | ') : 'Ninguno'}   |   Tasa: Bs. ${this.exchangeRate.toFixed(2)}`;
+                        ws.getCell('A2').font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF555555' } };
+                        ws.getCell('A2').alignment = { horizontal: 'center' };
+
+                        const totalCredit = datos.reduce((s, c) => s + c.remaining_amount, 0);
+                        ws.mergeCells(`A3:${lastCol}3`);
+                        ws.getCell('A3').value = `Cuentas: ${datos.length}   |   Total por Cobrar: $${totalCredit.toFixed(2)} (Bs. ${this.formatVE(totalCredit * this.exchangeRate)})`;
+                        ws.getCell('A3').font = { name: 'Calibri', size: 10, bold: true, color: { argb: colores.azulOscuro } };
+                        ws.getCell('A3').alignment = { horizontal: 'center' };
+
+                        const headers = ['#', 'Cliente', 'Cédula', 'Teléfono', 'Total $', 'Total Bs.', 'Pagado $', 'Pendiente $', 'Pendiente Bs.', 'Fecha Registro', 'Fecha Límite', 'Estado', ...(esCancelado ? ['Fecha de Cancelación'] : [])];
+                        const headerRow = ws.getRow(5);
+                        headers.forEach((h, idx) => {
+                            const cell = headerRow.getCell(idx + 1);
+                            cell.value = h;
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colores.azulClaro } };
+                            cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: colores.azulOscuro } };
+                            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                            cell.border = bordeGenerico;
+                        });
+                        headerRow.height = 20;
+
+                        let rowNum = 6;
+                        datos.forEach((c, idx) => {
+                            const row = ws.getRow(rowNum);
+                            row.getCell(1).value = idx + 1;
+                            row.getCell(2).value = c.customer_name || '-';
+                            row.getCell(3).value = c.customer_id_card || '-';
+                            row.getCell(4).value = c.customer_phone || '-';
+                            row.getCell(5).value = c.total_amount;
+                            row.getCell(6).value = c.total_amount * this.exchangeRate;
+                            row.getCell(7).value = c.paid_amount;
+                            row.getCell(8).value = c.remaining_amount;
+                            row.getCell(9).value = c.remaining_amount * this.exchangeRate;
+                            row.getCell(10).value = this.formatDateTime(c.created_at);
+                            row.getCell(11).value = this.formatDate(c.payment_date);
+                            row.getCell(12).value = this.getStatusText(c);
+                            if (esCancelado) row.getCell(13).value = this.getCancellationDate(c);
+
+                            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                                cell.border = bordeGenerico;
+                                cell.font = { name: 'Calibri', size: 10 };
+                                cell.alignment = { vertical: 'middle', horizontal: (colNumber >= 5 && colNumber <= 9) ? 'right' : (colNumber === 1 ? 'center' : 'left') };
+                                if ([5, 6, 7, 8, 9].includes(colNumber)) cell.numFmt = '#,##0.00';
+                                if (colNumber === 1) cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF888888' } };
+                                if (colNumber === 8) {
+                                    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: colores.rojoTexto } };
+                                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colores.rojoClaro } };
+                                }
+                                if (idx % 2 === 1 && colNumber !== 8) {
+                                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colores.azulMuyClaro } };
+                                }
+                            });
+                            rowNum++;
+                        });
+
+                        const totalRow = ws.getRow(rowNum);
+                        totalRow.getCell(2).value = 'TOTAL GENERAL';
+                        totalRow.getCell(5).value = datos.reduce((s, c) => s + c.total_amount, 0);
+                        totalRow.getCell(6).value = datos.reduce((s, c) => s + c.total_amount, 0) * this.exchangeRate;
+                        totalRow.getCell(7).value = datos.reduce((s, c) => s + c.paid_amount, 0);
+                        totalRow.getCell(8).value = totalCredit;
+                        totalRow.getCell(9).value = totalCredit * this.exchangeRate;
+                        totalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colores.azulClaro } };
+                            cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: colores.azulOscuro } };
+                            cell.border = bordeGenerico;
+                            if ([5, 6, 7, 8, 9].includes(colNumber)) { cell.numFmt = '#,##0.00'; cell.alignment = { horizontal: 'right' }; }
+                        });
+
+                        ws.columns = [
+                            { width: 6 }, { width: 28 }, { width: 14 }, { width: 16 }, { width: 12 }, { width: 14 },
+                            { width: 12 }, { width: 14 }, { width: 16 }, { width: 18 }, { width: 14 }, { width: 12 },
+                            ...(esCancelado ? [{ width: 18 }] : [])
+                        ];
+
+                        const buffer = await workbook.xlsx.writeBuffer();
+                        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+                        let nombreArchivo = 'Cuentas_por_Cobrar';
+                        if (this.filters.search) nombreArchivo += `_${this.filters.search.replace(/\s+/g, '_')}`;
+                        if (this.filters.status) nombreArchivo += `_${this.filters.status}`;
+                        nombreArchivo += `_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = nombreArchivo;
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+
+                        showToast('Excel generado correctamente', 'success');
+                    } catch (err) {
+                        console.error('Error generando Excel:', err);
+                        showToast('Error al generar Excel: ' + err.message, 'error');
+                    }
+                },
+
+                isOverdue(account) {
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const paymentDate = new Date(account.payment_date);
+                    return account.status !== 'paid' && paymentDate < today;
+                },
+
+                getStatusText(account) {
+                    if (this.isOverdue(account)) return 'Vencido';
+                    if (account.status === 'pending') return 'Pendiente';
+                    if (account.status === 'partial') return 'Parcial';
+                    if (account.status === 'paid') return 'Cancelado';
+                    return account.status;
+                },
+
+                // ✅ Fecha de Cancelación: es la fecha del último pago registrado en credit_payments
+                // (payment_date) para esa cuenta — no confundir con credit_accounts.payment_date,
+                // que es la fecha límite. Se apoya en this.cancellationDates (ver loadCancellationDates).
+                getCancellationDate(account) {
+                    const raw = this.cancellationDates[account.id];
+                    if (!raw) return '—';
+                    return this.formatDate(raw);
+                },
+
+                formatDate(dateString) { return DateUtils.formatDate(dateString); },
+                formatDateTime(dateString) { return DateUtils.formatDateTime(dateString); },
+                getInitials(name) { if (!name) return '??'; return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(); },
+
+                async viewAccount(account) {
+                    this.selectedAccount = account;
+                    try {
+                        const { data, error } = await supabase.from('credit_payments').select('*').eq('credit_account_id', account.id).order('payment_date', { ascending: false });
+                        if (error) throw error;
+                        this.accountPayments = data || [];
+                    } catch (err) { console.error('Error cargando pagos:', err); }
+
+                    this.accountItems = [];
+                    if (account.sale_id) {
+                        try {
+                            const { data, error } = await supabase.from('sale_items').select('*, products(name, size_liters)').eq('sale_id', account.sale_id);
+                            if (error) throw error;
+                            this.accountItems = data || [];
+                        } catch (err) { console.error('Error cargando productos de la venta:', err); }
+                    }
+
+                    this.showViewModal = true;
+                },
+
+                openPaymentModal(account) {
+                    this.selectedAccount = account;
+                    this.paymentForm = { amount: 0, payment_method: 'efectivo', reference: '', notes: '' };
+                    this.paymentNotesAuto = true;
+                    this.showPaymentModal = true;
+                },
+
+                closePaymentModal() {
+                    this.showPaymentModal = false;
+                    this.selectedAccount = null;
+                },
+
+                formatVE(n) {
+                    return (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+
+                onPaymentMethodChange() {
+                    if (this.paymentForm.payment_method === 'efectivo') {
+                        // El efectivo no requiere número de referencia
+                        this.paymentForm.reference = '';
+                    }
+                    this.updatePaymentNote();
+                },
+
+                updatePaymentNote() {
+                    // Solo autogeneramos la nota para métodos que se cobran en bolívares
+                    if (this.paymentForm.payment_method === 'efectivo') return;
+                    if (!this.paymentNotesAuto) return; // el usuario ya editó la nota manualmente
+                    const amount = this.paymentForm.amount;
+                    if (!amount || amount <= 0) {
+                        this.paymentForm.notes = '';
+                        return;
+                    }
+                    const bsAmount = amount * this.exchangeRate;
+                    this.paymentForm.notes = `Pago por ${this.formatVE(amount)} dólares por ${this.formatVE(this.exchangeRate)} igual a ${this.formatVE(bsAmount)}`;
+                },
+
+                canRegisterPayment() {
+                    if (!this.paymentForm.amount || this.paymentForm.amount <= 0) return false;
+                    if (this.paymentForm.amount > this.selectedAccount?.remaining_amount) return false;
+                    return true;
+                },
+
+                async registerPayment() {
+                    if (!this.canRegisterPayment()) {
+                        showToast('Ingrese un monto válido', 'error');
+                        return;
+                    }
+                    const confirmed = await Swal.fire({
+                        title: 'Confirmar Pago',
+                        html: `<div class="text-center space-y-2">
+                            <p class="text-gray-600">¿Registrar pago de:</p>
+                            <p class="text-3xl font-bold text-blue-600">$${this.paymentForm.amount.toFixed(2)}</p>
+                            <p class="text-sm text-gray-500">${this.paymentForm.payment_method !== 'efectivo' ? 'Equivalente: Bs. ' + this.formatVE(this.paymentForm.amount * this.exchangeRate) : ''}</p>
+                            <p class="text-sm text-gray-500">Método: ${this.paymentForm.payment_method}</p>
+                        </div>`,
+                        icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, Registrar', cancelButtonText: 'Cancelar', reverseButtons: true
+                    });
+                    if (!confirmed.isConfirmed) return;
+
+                    this.processing = true;
+                    try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        // ✅ payment_date se envía explícito en hora Caracas: si se deja que la
+                        // base de datos lo rellene por defecto (CURRENT_DATE), Postgres usa la
+                        // zona horaria del servidor (normalmente UTC), y cualquier pago hecho
+                        // después de las 8:00 p.m. hora Caracas quedaba guardado con la fecha
+                        // del día siguiente, haciendo que no apareciera en el Resumen Diario.
+                        const paymentDateCaracas = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
+                        const { error: paymentError } = await supabase.from('credit_payments').insert({
+                            credit_account_id: this.selectedAccount.id,
+                            amount: this.paymentForm.amount,
+                            payment_method: this.paymentForm.payment_method,
+                            reference: this.paymentForm.reference,
+                            notes: this.paymentForm.notes,
+                            created_by: session.user.id,
+                            payment_date: paymentDateCaracas
+                        });
+                        if (paymentError) throw paymentError;
+
+                        showToast('Pago registrado exitosamente', 'success');
+                        this.closePaymentModal();
+                        await this.loadCuentas();
+                    } catch (err) {
+                        console.error('Error registrando pago:', err);
+                        showToast('Error: ' + err.message, 'error');
+                    } finally {
+                        this.processing = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servicios Agua Potable - Inventario</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.min.js"></script>
+    <script src="date-utils.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .sidebar-mobile {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .sidebar-mobile.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 39;
+        }
+
+        .sidebar-overlay.show {
+            display: block;
+        }
+
+        @media (min-width: 1024px) {
+            .sidebar-mobile {
+                transform: translateX(0) !important;
+            }
+
+            .sidebar-overlay {
+                display: none !important;
+            }
+
+            .menu-toggle {
+                display: none !important;
+            }
+        }
+
+        .toastify {
+            font-family: 'Inter', sans-serif !important;
+            font-weight: 500 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15) !important;
+            padding: 14px 20px !important;
+            min-width: 280px;
+            font-size: 14px !important;
+            color: white !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+
+        .toastify-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        }
+
+        .toastify-error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+        }
+
+        .toastify-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        }
+
+        .toastify-info {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        }
+
+        .swal2-popup {
+            font-family: 'Inter', sans-serif !important;
+            border-radius: 16px !important;
+            padding: 2rem !important;
+        }
+
+        .swal2-title {
+            font-size: 1.5rem !important;
+            font-weight: 700 !important;
+            color: #1f2937 !important;
+        }
+
+        .swal2-html-container {
+            font-size: 0.95rem !important;
+            color: #4b5563 !important;
+        }
+
+        .swal2-confirm {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%) !important;
+            border: none !important;
+            border-radius: 12px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3) !important;
+            transition: all 0.2s !important;
+        }
+
+        .swal2-confirm:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4) !important;
+        }
+
+        .swal2-cancel {
+            background: #f3f4f6 !important;
+            color: #4b5563 !important;
+            border: none !important;
+            border-radius: 12px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+            transition: all 0.2s !important;
+        }
+
+        .swal2-cancel:hover {
+            background: #e5e7eb !important;
+            transform: translateY(-2px) !important;
+        }
+
+        @keyframes bounce-in {
+            0% {
+                transform: scale(0.3);
+                opacity: 0;
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            70% {
+                transform: scale(0.9);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .animate-bounce-in {
+            animation: bounce-in 0.4s ease-out;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50" x-data="inventarioApp()" x-init="initInventario()">
+
+    <!-- Overlay para móvil -->
+    <div class="sidebar-overlay" :class="{ 'show': mobileMenuOpen }" @click="mobileMenuOpen = false"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar-mobile fixed left-0 top-0 h-full w-64 gradient-bg text-white z-40 lg:block"
+        :class="{ 'open': mobileMenuOpen }">
+        <div class="p-6">
+            <div class="mb-6">
+                <div class="flex items-center space-x-3 mb-3">
+                    <i class="fas fa-tint text-3xl"></i>
+                    <div>
+                        <h1 class="text-xl font-bold">Servicios Agua Potable</h1>
+                        <p class="text-xs text-blue-200">Sistema de Gestión</p>
+                    </div>
+                </div>
+                <div class="bg-white bg-opacity-10 rounded-lg px-3 py-2">
+                    <p class="text-xs text-blue-200 mb-0.5">Sucursal</p>
+                    <p class="font-semibold capitalize text-sm" x-text="userBranch || 'Cargando...'"></p>
+                </div>
+            </div>
+
+            <nav class="space-y-2">
+                <a href="index.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-home w-5"></i><span>Dashboard</span></a>
+                <a href="ventas.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-shopping-cart w-5"></i><span>Ventas</span></a>
+                <a href="cuentas-cobrar.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-file-invoice-dollar w-5"></i><span>Cuentas por Cobrar</span></a>
+                <a href="clientes.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-users w-5"></i><span>Clientes</span></a>
+                <a href="inventario.html"
+                    class="flex items-center space-x-3 px-4 py-3 bg-white bg-opacity-20 rounded-lg"><i
+                        class="fas fa-boxes w-5"></i><span class="font-medium">Inventario</span></a>
+                <a href="gastos.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-receipt w-5"></i><span>Gastos</span></a>
+                <a href="usuarios.html" x-show="userRole === 'admin'"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-user-cog w-5"></i><span>Usuarios</span></a>
+                <a href="reportes.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-chart-line w-5"></i><span>Reportes</span></a>
+                <a href="resumen-diario.html"
+                    class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
+                        class="fas fa-file-alt w-5"></i><span>Resumen Diario</span></a>
+            </nav>
+        </div>
+
+        <div class="absolute bottom-0 left-0 right-0 p-4 bg-black bg-opacity-20">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full bg-white bg-opacity-20 flex items-center justify-center font-bold"
+                    x-text="userInitials"></div>
+                <div>
+                    <p class="text-sm font-medium" x-text="userName || 'Usuario'"></p>
+                    <p class="text-xs text-blue-200 capitalize" x-text="userRole || 'Cargando...'"></p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="lg:ml-64 min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <button @click="mobileMenuOpen = !mobileMenuOpen"
+                    class="menu-toggle lg:hidden text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Inventario</h2>
+                    <p class="text-sm text-gray-500"
+                        x-text="'Control de productos y tanques - ' + (selectedBranch === 'all' ? 'Consolidado' : userBranch) + ' | ' + DateUtils.formatDateLong(new Date())">
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <!-- Dropdown de Sucursales (Solo Admin) -->
+                <div x-show="userRole === 'admin'" class="hidden md:block mr-2">
+                    <select x-model="selectedBranch" @change="refreshInventory()"
+                        class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm">
+                        <option value="all">🌐 Todas las Sucursales (Consolidado)</option>
+                        <template x-for="branch in availableBranches" :key="branch">
+                            <option :value="branch" x-text="branch.charAt(0).toUpperCase() + branch.slice(1)"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <button @click="openManageInventoryModal()"
+                    class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                    <i class="fas fa-plus"></i>
+                    <span class="hidden sm:inline">Gestionar Inventario</span>
+                </button>
+                <button @click="openRefillTankModal()"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                    <i class="fas fa-plus"></i>
+                    <span class="hidden sm:inline">Recargar Tanque</span>
+                </button>
+                <button @click="openFillBottlesModal()"
+                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                    <i class="fas fa-tint"></i>
+                    <span class="hidden sm:inline">Llenar Botellones</span>
+                </button>
+                <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
+                    <i class="fas fa-sign-out-alt mr-2"></i>Salir
+                </button>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="p-6">
+            <div x-show="loading" class="text-center py-12">
+                <i class="fas fa-circle-notch fa-spin text-4xl text-blue-500"></i>
+                <p class="mt-4 text-gray-600">Cargando inventario...</p>
+            </div>
+
+            <div x-show="!loading">
+                <!-- Info Box -->
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                    <div class="flex items-start">
+                        <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
+                        <div>
+                            <h4 class="font-semibold text-blue-900">Inventario Virtual y Físico</h4>
+                            <p class="text-sm text-blue-700 mt-1">
+                                El inventario de botellones con agua se calcula automáticamente basado en el agua
+                                disponible en los tanques.
+                                Los botellones vacíos y tapas se gestionan por stock físico real.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Virtual Inventory Cards - SIN ETIQUETAS -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <template x-for="item in virtualInventory" :key="item.product_id + '_' + item.branch">
+                        <div class="bg-white rounded-2xl shadow-sm p-6 border-t-4" :class="{
+                                'border-cyan-500': item.size_liters === 5,
+                                'border-blue-500': item.size_liters === 13,
+                                'border-blue-700': item.size_liters === 20,
+                                'border-amber-500': item.product_type === 'empty_bottle' && item.size_liters === 15,
+                                'border-orange-500': item.product_type === 'empty_bottle' && item.size_liters === 20,
+                                'border-purple-500': item.product_type === 'cap'
+                            }">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-16 h-16 rounded-full flex items-center justify-center" :class="{
+                                        'bg-cyan-100': item.size_liters === 5,
+                                        'bg-blue-100': item.size_liters === 13 || item.size_liters === 20,
+                                        'bg-amber-100': item.product_type === 'empty_bottle' && item.size_liters === 15,
+                                        'bg-orange-100': item.product_type === 'empty_bottle' && item.size_liters === 20,
+                                        'bg-purple-100': item.product_type === 'cap'
+                                    }">
+                                    <i class="fas text-3xl" :class="{
+                                        'fa-tint': item.size_liters === 5 || item.size_liters === 13 || item.size_liters === 20,
+                                        'fa-box': item.product_type === 'empty_bottle',
+                                        'fa-circle': item.product_type === 'cap'
+                                    }" :style="{
+                                        color: item.size_liters === 5 ? '#0891b2' : 
+                                               item.size_liters === 13 ? '#3b82f6' : 
+                                               item.size_liters === 20 ? '#1d4ed8' : 
+                                               item.product_type === 'cap' ? '#9333ea' : '#d97706'
+                                    }"></i>
+                                </div>
+                                <span
+                                    class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">Disponible</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-800" x-text="item.product_name"></h3>
+                            <p class="text-4xl font-bold text-gray-900 mt-2" x-text="item.virtual_stock"></p>
+                            <p class="text-sm text-gray-500 mt-1"
+                                x-text="item.product_type === 'cap' || item.product_type === 'empty_bottle' ? 'unidades disponibles' : 'botellones disponibles'">
+                            </p>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Water Tanks -->
+                <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center justify-between">
+                        <span class="flex items-center">
+                            <i class="fas fa-database text-blue-500 mr-2"></i>
+                            Tanques de Almacenamiento
+                        </span>
+                        <button @click="openRefillTankModal()"
+                            class="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg">
+                            <i class="fas fa-plus mr-1"></i>Recargar
+                        </button>
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <template x-for="tank in tanks" :key="tank.id">
+                            <div class="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h4 class="font-semibold text-gray-800" x-text="tank.name"></h4>
+                                        <p class="text-sm text-gray-500"
+                                            x-text="'Capacidad: ' + tank.capacity_liters.toLocaleString() + 'L'"></p>
+                                    </div>
+                                    <span class="px-3 py-1 rounded-full text-xs font-semibold" :class="{
+                                            'bg-green-100 text-green-800': (tank.current_liters / tank.capacity_liters) > 0.7,
+                                            'bg-yellow-100 text-yellow-800': (tank.current_liters / tank.capacity_liters) > 0.4 && (tank.current_liters / tank.capacity_liters) <= 0.7,
+                                            'bg-red-100 text-red-800': (tank.current_liters / tank.capacity_liters) <= 0.4
+                                        }"
+                                        x-text="Math.round((tank.current_liters / tank.capacity_liters) * 100) + '%'"></span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
+                                    <div class="h-4 rounded-full transition-all duration-500" :class="{
+                                            'bg-gradient-to-r from-blue-400 to-blue-600': (tank.current_liters / tank.capacity_liters) > 0.7,
+                                            'bg-gradient-to-r from-yellow-400 to-yellow-600': (tank.current_liters / tank.capacity_liters) > 0.4 && (tank.current_liters / tank.capacity_liters) <= 0.7,
+                                            'bg-gradient-to-r from-red-400 to-red-600': (tank.current_liters / tank.capacity_liters) <= 0.4
+                                        }"
+                                        :style="'width: ' + ((tank.current_liters / tank.capacity_liters) * 100) + '%'">
+                                    </div>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600"
+                                        x-text="tank.current_liters.toLocaleString() + 'L disponibles'"></span>
+                                    <span class="font-semibold" :class="{
+                                            'text-blue-600': (tank.current_liters / tank.capacity_liters) > 0.7,
+                                            'text-yellow-600': (tank.current_liters / tank.capacity_liters) > 0.4 && (tank.current_liters / tank.capacity_liters) <= 0.7,
+                                            'text-red-600': (tank.current_liters / tank.capacity_liters) <= 0.4
+                                        }"
+                                        x-text="(tank.capacity_liters - tank.current_liters).toLocaleString() + 'L usados'"></span>
+                                </div>
+                                <div class="mt-2 text-xs text-gray-500" x-show="tank.current_liters < tank.min_level">
+                                    <i class="fas fa-exclamation-triangle text-red-500 mr-1"></i>
+                                    Nivel bajo - Mínimo recomendado: <span x-text="tank.min_level + 'L'"></span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div x-show="tanks.length === 0" class="col-span-full text-center py-8 text-gray-400">
+                            <i class="fas fa-database text-4xl mb-2"></i>
+                            <p>No hay tanques registrados</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Distribution Info -->
+                <div class="bg-white rounded-2xl shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Distribución del Agua</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-blue-900">20 Litros</h4>
+                                <span class="text-2xl font-bold text-blue-600">70%</span>
+                            </div>
+                            <p class="text-sm text-blue-700">
+                                <span x-text="Math.round(totalWater * 0.70).toLocaleString()"></span>L disponibles
+                            </p>
+                            <p class="text-2xl font-bold text-blue-900 mt-2"
+                                x-text="Math.round((totalWater * 0.70) / 20) + ' botellones'"></p>
+                        </div>
+
+                        <div class="bg-cyan-50 rounded-xl p-4 border-2 border-cyan-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-cyan-900">5 Litros</h4>
+                                <span class="text-2xl font-bold text-cyan-600">20%</span>
+                            </div>
+                            <p class="text-sm text-cyan-700">
+                                <span x-text="Math.round(totalWater * 0.20).toLocaleString()"></span>L disponibles
+                            </p>
+                            <p class="text-2xl font-bold text-cyan-900 mt-2"
+                                x-text="Math.round((totalWater * 0.20) / 5) + ' botellones'"></p>
+                        </div>
+
+                        <div class="bg-indigo-50 rounded-xl p-4 border-2 border-indigo-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-indigo-900">13 Litros</h4>
+                                <span class="text-2xl font-bold text-indigo-600">10%</span>
+                            </div>
+                            <p class="text-sm text-indigo-700">
+                                <span x-text="Math.round(totalWater * 0.10).toLocaleString()"></span>L disponibles
+                            </p>
+                            <p class="text-2xl font-bold text-indigo-900 mt-2"
+                                x-text="Math.round((totalWater * 0.10) / 13) + ' botellones'"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Gestionar Inventario -->
+    <div x-show="showManageInventoryModal" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="closeManageInventoryModal()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-bounce-in"
+            @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
+                <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-boxes text-purple-600 mr-2"></i>Gestionar Inventario
+                </h3>
+                <button @click="closeManageInventoryModal()" class="text-gray-400 hover:text-gray-600 touch-btn p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
+                    <select x-model="manageForm.productId" @change="loadProductData()"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500">
+                        <option value="">Seleccionar producto...</option>
+                        <template x-for="item in virtualInventory" :key="item.product_id">
+                            <option :value="item.product_id"
+                                x-text="item.product_name + ' (Stock: ' + item.virtual_stock + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad a Agregar *</label>
+                    <input type="number" x-model.number="manageForm.quantity" step="1" min="1"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+                        placeholder="Ej: 50">
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Se sumará al stock actual
+                    </p>
+                </div>
+
+                <div x-show="selectedProduct" class="bg-purple-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-purple-900 mb-2">Información del Producto</h4>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Producto:</span>
+                            <span class="font-semibold" x-text="selectedProduct?.product_name"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Stock actual:</span>
+                            <span class="font-semibold" x-text="selectedProduct?.virtual_stock"></span>
+                        </div>
+                        <div class="flex justify-between pt-2 border-t border-purple-200">
+                            <span class="text-gray-800 font-semibold">Nuevo stock:</span>
+                            <span class="font-bold text-green-600"
+                                x-text="(selectedProduct?.virtual_stock || 0) + (manageForm.quantity || 0)"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex justify-end space-x-3 sticky bottom-0">
+                <button @click="closeManageInventoryModal()" class="px-4 py-2 text-gray-600 touch-btn">Cancelar</button>
+                <button @click="updateInventory()" :disabled="processing"
+                    class="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 touch-btn flex items-center space-x-2">
+                    <i class="fas fa-circle-notch fa-spin" x-show="processing"></i>
+                    <i class="fas fa-save" x-show="!processing"></i>
+                    <span x-text="processing ? 'Procesando...' : 'Actualizar'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Recargar Tanque -->
+    <div x-show="showRefillTankModal" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="closeRefillTankModal()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-bounce-in"
+            @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
+                <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-plus-circle text-blue-600 mr-2"></i>Recargar Tanque
+                </h3>
+                <button @click="closeRefillTankModal()" class="text-gray-400 hover:text-gray-600 touch-btn p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Tanque *</label>
+                    <select x-model="refillForm.tankId"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">Seleccionar tanque...</option>
+                        <template x-for="tank in tanks" :key="tank.id">
+                            <option :value="tank.id"
+                                x-text="tank.name + ' (' + tank.current_liters + 'L / ' + tank.capacity_liters + 'L)'">
+                            </option>
+                        </template>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Litros a Agregar *</label>
+                    <input type="number" x-model.number="refillForm.liters" step="1" min="1"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: 3500">
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Se sumará al nivel actual del tanque
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Notas</label>
+                    <textarea x-model="refillForm.notes" rows="2"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: Compra de agua - Factura #1234"></textarea>
+                </div>
+
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-blue-900 mb-2">Resumen</h4>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Nivel actual:</span>
+                            <span class="font-semibold"
+                                x-text="(getCurrentTankLevel() || 0).toLocaleString() + 'L'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">A agregar:</span>
+                            <span class="font-semibold text-blue-600"
+                                x-text="(refillForm.liters || 0).toLocaleString() + 'L'"></span>
+                        </div>
+                        <div class="flex justify-between pt-2 border-t border-blue-200">
+                            <span class="text-gray-800 font-semibold">Nuevo nivel:</span>
+                            <span class="font-bold text-green-600"
+                                x-text="(getCurrentTankLevel() + (refillForm.liters || 0)).toLocaleString() + 'L'"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex justify-end space-x-3 sticky bottom-0">
+                <button @click="closeRefillTankModal()" class="px-4 py-2 text-gray-600 touch-btn">Cancelar</button>
+                <button @click="refillTank()" :disabled="processing"
+                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 touch-btn flex items-center space-x-2">
+                    <i class="fas fa-circle-notch fa-spin" x-show="processing"></i>
+                    <i class="fas fa-save" x-show="!processing"></i>
+                    <span x-text="processing ? 'Procesando...' : 'Recargar'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Llenar Botellones -->
+    <div x-show="showFillBottlesModal" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="closeFillBottlesModal()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-bounce-in"
+            @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
+                <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-tint text-cyan-600 mr-2"></i>Llenar Botellones
+                </h3>
+                <button @click="closeFillBottlesModal()" class="text-gray-400 hover:text-gray-600 touch-btn p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Botellón *</label>
+                    <select x-model="fillForm.sizeLiters"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">Seleccionar...</option>
+                        <option value="5">Botellón 5 Litros</option>
+                        <option value="13">Botellón 13 Litros</option>
+                        <option value="20">Botellón 20 Litros</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad de Botellones *</label>
+                    <input type="number" x-model.number="fillForm.quantity" step="1" min="1"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: 50">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Tanque de Origen *</label>
+                    <select x-model="fillForm.tankId"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">Seleccionar tanque...</option>
+                        <template x-for="tank in tanks" :key="tank.id">
+                            <option :value="tank.id" x-text="tank.name + ' (' + tank.current_liters + 'L disponibles)'">
+                            </option>
+                        </template>
+                    </select>
+                </div>
+
+                <div class="bg-cyan-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-cyan-900 mb-2">Resumen</h4>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Botellones:</span>
+                            <span class="font-semibold" x-text="(fillForm.quantity || 0) + ' unidades'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Tamaño:</span>
+                            <span class="font-semibold" x-text="getFillFormSizeName()"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Agua requerida:</span>
+                            <span class="font-semibold text-cyan-600"
+                                x-text="((fillForm.quantity || 0) * (fillForm.sizeLiters || 0)).toLocaleString() + 'L'"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex justify-end space-x-3 sticky bottom-0">
+                <button @click="closeFillBottlesModal()" class="px-4 py-2 text-gray-600 touch-btn">Cancelar</button>
+                <button @click="fillBottles()" :disabled="processing"
+                    class="px-6 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 disabled:opacity-50 touch-btn flex items-center space-x-2">
+                    <i class="fas fa-circle-notch fa-spin" x-show="processing"></i>
+                    <i class="fas fa-save" x-show="!processing"></i>
+                    <span x-text="processing ? 'Procesando...' : 'Llenar'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://wotoslngwrsddohowkba.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvdG9zbG5nd3JzZGRvaG93a2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMDk5MTksImV4cCI6MjA5ODc4NTkxOX0.zvce9AmOBwPxmtOikfyT0FdbyGF0Szec-AZfTiYqzBs';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function logout() {
+            await supabase.auth.signOut();
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        function showToast(message, type = 'success') {
+            const gradients = {
+                success: 'linear-gradient(to right, #10b981, #059669)',
+                error: 'linear-gradient(to right, #ef4444, #dc2626)',
+                warning: 'linear-gradient(to right, #f59e0b, #d97706)',
+                info: 'linear-gradient(to right, #3b82f6, #2563eb)'
+            };
+            const icons = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
+            Toastify({
+                text: `${icons[type]} ${message}`,
+                duration: 3000, close: true, gravity: 'top', position: 'right', stopOnFocus: true,
+                style: {
+                    background: gradients[type], borderRadius: '12px', fontFamily: 'Inter, sans-serif',
+                    fontWeight: '500', fontSize: '14px', padding: '14px 20px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)', minWidth: '280px'
+                }
+            }).showToast();
+        }
+
+        async function showConfirm(title, html, confirmText = 'Confirmar', cancelText = 'Cancelar') {
+            const result = await Swal.fire({
+                title: title, html: html, icon: 'question', showCancelButton: true,
+                confirmButtonText: confirmText, cancelButtonText: cancelText, reverseButtons: true, focusCancel: true,
+                customClass: {
+                    popup: 'rounded-2xl',
+                    confirmButton: 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold',
+                    cancelButton: 'bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold'
+                },
+                buttonsStyling: false
+            });
+            return result.isConfirmed;
+        }
+
+        function round2(num) {
+            if (num === null || num === undefined || isNaN(num)) return 0;
+            return Math.floor(parseFloat(num) * 100) / 100;
+        }
+
+        function inventarioApp() {
+            return {
+                mobileMenuOpen: false,
+                currentPage: 'inventario',
+                loading: true,
+                processing: false,
+                virtualInventory: [],
+                tanks: [],
+                totalWater: 0,
+                userName: '',
+                userRole: '',
+                userBranch: '',
+                userInitials: '??',
+
+                selectedBranch: 'all',
+                availableBranches: [],
+
+                showManageInventoryModal: false,
+                showRefillTankModal: false,
+                showFillBottlesModal: false,
+                manageForm: { productId: '', quantity: 0 },
+                refillForm: { tankId: '', liters: 0, notes: '' },
+                fillForm: { sizeLiters: '', quantity: 0, tankId: '' },
+                selectedProduct: null,
+
+                async initInventario() {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) { window.location.href = 'login.html'; return; }
+
+                    try {
+                        const { data: profile } = await supabase.from('profiles').select('full_name, role, branch').eq('id', session.user.id).single();
+                        if (profile) {
+                            this.userName = profile.full_name;
+                            this.userRole = profile.role;
+                            this.userBranch = profile.branch;
+                            this.userInitials = this.getInitials(profile.full_name);
+                            this.selectedBranch = (profile.role === 'admin') ? 'all' : profile.branch;
+                        }
+
+                        if (this.userRole === 'admin') {
+                            await this.loadAvailableBranches();
+                        }
+
+                        await this.loadVirtualInventory();
+                        await this.loadTanks();
+                    } catch (err) {
+                        console.error('Error inicializando:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async loadAvailableBranches() {
+                    try {
+                        const { data, error } = await supabase.from('profiles').select('branch').not('branch', 'is', null);
+                        if (!error && data) {
+                            this.availableBranches = [...new Set(data.map(p => p.branch))];
+                        }
+                    } catch (err) {
+                        console.error('Error cargando sucursales:', err);
+                    }
+                },
+
+                async refreshInventory() {
+                    this.loading = true;
+                    await Promise.all([this.loadVirtualInventory(), this.loadTanks()]);
+                    this.loading = false;
+                },
+
+                async loadVirtualInventory() {
+                    try {
+                        console.log('🔍 ========== INICIO CARGA INVENTARIO ==========');
+                        console.log('📍 Sucursal seleccionada:', this.selectedBranch);
+
+                        let inventoryQuery = supabase.from('inventory')
+                            .select(`
+                                id,
+                                product_id,
+                                quantity,
+                                min_stock,
+                                branch,
+                                products!inner (
+                                    id,
+                                    name,
+                                    size_liters,
+                                    product_type,
+                                    description
+                                )
+                            `);
+
+                        if (this.selectedBranch !== 'all') {
+                            inventoryQuery = inventoryQuery.eq('branch', this.selectedBranch);
+                        }
+
+                        const { data: inventoryData, error: inventoryError } = await inventoryQuery;
+
+                        if (inventoryError) {
+                            console.error('❌ Error consultando inventory:', inventoryError);
+                            throw inventoryError;
+                        }
+
+                        let pricesQuery = supabase.from('product_prices')
+                            .select(`id, product_id, price_usd, branch, is_active`);
+
+                        if (this.selectedBranch !== 'all') {
+                            pricesQuery = pricesQuery.eq('branch', this.selectedBranch);
+                        }
+
+                        const { data: pricesData, error: pricesError } = await pricesQuery.eq('is_active', true);
+
+                        const priceMap = {};
+                        (pricesData || []).forEach(price => {
+                            const key = `${price.product_id}_${price.branch}`;
+                            priceMap[key] = price.price_usd;
+                        });
+
+                        const combinedData = inventoryData.map(item => {
+                            const priceKey = `${item.product_id}_${item.branch}`;
+                            const price = priceMap[priceKey] || 0;
+                            const isCap = item.products.product_type === 'cap';
+                            const isEmptyBottle = item.products.product_type === 'empty_bottle';
+
+                            return {
+                                product_id: item.product_id,
+                                product_name: item.products.name,
+                                size_liters: isCap ? null : item.products.size_liters,
+                                product_type: item.products.product_type,
+                                price: price,
+                                virtual_stock: item.quantity,
+                                total_value: round2(item.quantity * price),
+                                water_assigned: (isCap || isEmptyBottle) ? 0 : (item.quantity * (item.products.size_liters || 0))
+                            };
+                        });
+
+                        this.virtualInventory = combinedData;
+
+                    } catch (err) {
+                        console.error('❌ Error cargando inventario virtual:', err);
+                        showToast('Error al cargar inventario: ' + err.message, 'error');
+                        this.virtualInventory = [];
+                    }
+                },
+
+                async loadTanks() {
+                    try {
+                        let query = supabase.from('tanks').select('*').order('name');
+
+                        if (this.selectedBranch !== 'all') {
+                            query = query.eq('branch', this.selectedBranch);
+                        }
+
+                        const { data, error } = await query;
+                        if (error) throw error;
+
+                        this.tanks = data || [];
+                        this.totalWater = this.tanks.reduce((sum, tank) => sum + tank.current_liters, 0);
+                    } catch (err) {
+                        console.error('Error cargando tanques:', err);
+                        showToast('Error al cargar tanques', 'error');
+                    }
+                },
+
+                getInitials(name) {
+                    if (!name) return '??';
+                    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                },
+
+                formatDate(dateString) { return DateUtils.formatDate(dateString); },
+                formatDateTime(dateString) { return DateUtils.formatDateTime(dateString); },
+                formatDateLong(dateString) { return DateUtils.formatDateLong(dateString); },
+
+                openManageInventoryModal() {
+                    this.manageForm = { productId: '', quantity: 0 };
+                    this.selectedProduct = null;
+                    this.showManageInventoryModal = true;
+                },
+                closeManageInventoryModal() { this.showManageInventoryModal = false; },
+
+                loadProductData() {
+                    this.selectedProduct = this.virtualInventory.find(item => item.product_id === this.manageForm.productId) || null;
+                },
+
+                async updateInventory() {
+                    if (!this.manageForm.productId) { showToast('Seleccione un producto', 'warning'); return; }
+                    if (!this.manageForm.quantity || this.manageForm.quantity <= 0) { showToast('Ingrese una cantidad válida', 'warning'); return; }
+
+                    const product = this.selectedProduct;
+                    const newStock = (product?.virtual_stock || 0) + this.manageForm.quantity;
+
+                    const confirmed = await showConfirm('Confirmar Actualización', `
+                        <div class="text-left space-y-2">
+                            <p><strong>Producto:</strong> ${product?.product_name}</p>
+                            <p><strong>Stock actual:</strong> ${product?.virtual_stock || 0}</p>
+                            <p><strong>A agregar:</strong> ${this.manageForm.quantity}</p>
+                            <div class="bg-green-50 p-3 rounded-lg mt-2">
+                                <p class="font-bold text-green-600">Nuevo stock: ${newStock}</p>
+                            </div>
+                        </div>`, 'Confirmar', 'Cancelar');
+
+                    if (!confirmed) return;
+
+                    this.processing = true;
+                    try {
+                        const { data: { session } } = await supabase.auth.getSession();
+
+                        // Actualizar inventario
+                        const { error: updateError } = await supabase.from('inventory')
+                            .update({
+                                quantity: newStock,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('product_id', this.manageForm.productId)
+                            .eq('branch', this.selectedBranch === 'all' ? this.userBranch : this.selectedBranch);
+
+                        if (updateError) throw updateError;
+
+                        showToast(`Inventario actualizado: ${newStock} unidades`, 'success');
+                        this.closeManageInventoryModal();
+                        await this.refreshInventory();
+                    } catch (err) {
+                        console.error('Error actualizando inventario:', err);
+                        showToast('Error al actualizar inventario: ' + err.message, 'error');
+                    } finally {
+                        this.processing = false;
+                    }
+                },
+
+                openRefillTankModal() {
+                    this.refillForm = { tankId: '', liters: 0, notes: '' };
+                    this.showRefillTankModal = true;
+                },
+                closeRefillTankModal() { this.showRefillTankModal = false; },
+                getCurrentTankLevel() {
+                    const tank = this.tanks.find(t => t.id === this.refillForm.tankId);
+                    return tank ? tank.current_liters : 0;
+                },
+
+                async refillTank() {
+                    if (!this.refillForm.tankId) { showToast('Seleccione un tanque', 'warning'); return; }
+                    if (!this.refillForm.liters || this.refillForm.liters <= 0) { showToast('Ingrese una cantidad válida de litros', 'warning'); return; }
+
+                    const tank = this.tanks.find(t => t.id === this.refillForm.tankId);
+                    const newLevel = tank.current_liters + this.refillForm.liters;
+
+                    if (newLevel > tank.capacity_liters) {
+                        showToast(`Excede la capacidad del tanque (${tank.capacity_liters}L)`, 'error');
+                        return;
+                    }
+
+                    const confirmed = await showConfirm('Confirmar Recarga', `
+                        <div class="text-left space-y-2">
+                            <p><strong>Tanque:</strong> ${tank.name}</p>
+                            <p><strong>Nivel actual:</strong> ${tank.current_liters.toLocaleString()}L</p>
+                            <p><strong>A agregar:</strong> ${this.refillForm.liters.toLocaleString()}L</p>
+                            <div class="bg-green-50 p-3 rounded-lg mt-2">
+                                <p class="font-bold text-green-600">Nuevo nivel: ${newLevel.toLocaleString()}L</p>
+                            </div>
+                        </div>`, 'Confirmar Recarga', 'Cancelar');
+
+                    if (!confirmed) return;
+
+                    this.processing = true;
+                    try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const { error: updateError } = await supabase.from('tanks').update({
+                            current_liters: newLevel, updated_at: new Date().toISOString()
+                        }).eq('id', this.refillForm.tankId);
+                        if (updateError) throw updateError;
+
+                        const { error: logError } = await supabase.from('tank_logs').insert({
+                            tank_id: this.refillForm.tankId, change_type: 'refill', liters_changed: this.refillForm.liters,
+                            previous_level: tank.current_liters, new_level: newLevel,
+                            notes: this.refillForm.notes || 'Recarga de tanque', created_by: session.user.id
+                        });
+                        if (logError) console.warn('Error registrando log:', logError);
+
+                        showToast(`Tanque recargado: ${newLevel.toLocaleString()}L`, 'success');
+                        this.closeRefillTankModal();
+                        await this.refreshInventory();
+                    } catch (err) {
+                        console.error('Error recargando tanque:', err);
+                        showToast('Error al recargar tanque: ' + err.message, 'error');
+                    } finally {
+                        this.processing = false;
+                    }
+                },
+
+                openFillBottlesModal() {
+                    this.fillForm = { sizeLiters: '', quantity: 0, tankId: '' };
+                    this.showFillBottlesModal = true;
+                },
+                closeFillBottlesModal() { this.showFillBottlesModal = false; },
+                getFillFormSizeName() {
+                    const sizes = { '5': '5 Litros', '13': '13 Litros', '20': '20 Litros' };
+                    return sizes[this.fillForm.sizeLiters] || '';
+                },
+
+                async fillBottles() {
+                    if (!this.fillForm.sizeLiters) { showToast('Seleccione el tipo de botellón', 'warning'); return; }
+                    if (!this.fillForm.quantity || this.fillForm.quantity <= 0) { showToast('Ingrese una cantidad válida', 'warning'); return; }
+                    if (!this.fillForm.tankId) { showToast('Seleccione un tanque de origen', 'warning'); return; }
+
+                    const tank = this.tanks.find(t => t.id === this.fillForm.tankId);
+                    const waterNeeded = this.fillForm.quantity * parseInt(this.fillForm.sizeLiters);
+
+                    if (waterNeeded > tank.current_liters) {
+                        showToast(`Agua insuficiente en el tanque. Disponible: ${tank.current_liters}L`, 'error');
+                        return;
+                    }
+
+                    const newLevel = tank.current_liters - waterNeeded;
+                    const confirmed = await showConfirm('Confirmar Llenado', `
+                        <div class="text-left space-y-2">
+                            <p><strong>Botellones:</strong> ${this.fillForm.quantity} x ${this.fillForm.sizeLiters}L</p>
+                            <p><strong>Agua requerida:</strong> ${waterNeeded.toLocaleString()}L</p>
+                            <p><strong>Tanque:</strong> ${tank.name}</p>
+                            <div class="bg-yellow-50 p-3 rounded-lg mt-2">
+                                <p class="font-bold text-yellow-600">Nuevo nivel: ${newLevel.toLocaleString()}L</p>
+                            </div>
+                        </div>`, 'Confirmar Llenado', 'Cancelar');
+
+                    if (!confirmed) return;
+
+                    this.processing = true;
+                    try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const { error: updateError } = await supabase.from('tanks').update({
+                            current_liters: newLevel, updated_at: new Date().toISOString()
+                        }).eq('id', this.fillForm.tankId);
+                        if (updateError) throw updateError;
+
+                        const { error: logError } = await supabase.from('tank_logs').insert({
+                            tank_id: this.fillForm.tankId, change_type: 'bottle_filling', liters_changed: -waterNeeded,
+                            previous_level: tank.current_liters, new_level: newLevel,
+                            notes: `Llenado de ${this.fillForm.quantity} botellones de ${this.fillForm.sizeLiters}L`, created_by: session.user.id
+                        });
+                        if (logError) console.warn('Error registrando log:', logError);
+
+                        const { error: fillingError } = await supabase.from('bottle_filling').insert({
+                            branch: this.selectedBranch === 'all' ? this.userBranch : this.selectedBranch,
+                            product_id: null, quantity_filled: this.fillForm.quantity,
+                            water_used_liters: waterNeeded, tank_id: this.fillForm.tankId, filled_by: session.user.id
+                        });
+                        if (fillingError) console.warn('Error registrando llenado:', fillingError);
+
+                        showToast(`${this.fillForm.quantity} botellones de ${this.fillForm.sizeLiters}L llenados`, 'success');
+                        this.closeFillBottlesModal();
+                        await this.refreshInventory();
+                    } catch (err) {
+                        console.error('Error llenando botellones:', err);
+                        showToast('Error al llenar botellones: ' + err.message, 'error');
+                    } finally {
+                        this.processing = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
