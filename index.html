@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Servicios Agua Potable - Dashboard</title>
+    <title>Auto Servicio - Dashboard</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -102,7 +102,7 @@
                 <div class="flex items-center space-x-3 mb-3">
                     <i class="fas fa-tint text-3xl"></i>
                     <div>
-                        <h1 class="text-xl font-bold">Servicios Agua Potable</h1>
+                        <h1 class="text-xl font-bold">Auto Servicio</h1>
                         <p class="text-xs text-blue-200">Sistema de Gestión</p>
                     </div>
                 </div>
@@ -841,29 +841,7 @@
         }
 
     </script>
-	
-	   <script>
-     // Asegúrate de que estas variables ya estén definidas con tus claves reales
-     // const supabaseUrl = 'TU_URL';
-     // const supabaseKey = 'TU_ANON_KEY';
-     // const supabase = createClient(supabaseUrl, supabaseKey);
-
-     async function probarConexion() {
-         console.log("🔄 Intentando conectar a Supabase...");
-         // Intentamos hacer una consulta simple a la tabla 'inventario'
-         const { data, error } = await supabase.from('inventario').select('*').limit(1);
-         
-         if (error) {
-             console.error("❌ Error de conexión o tabla:", error.message);
-         } else {
-             console.log("✅ ¡Conexión exitosa! Datos recibidos:", data);
-         }
-     }
-     
-     // Ejecutar la prueba cuando cargue la página
-     probarConexion();
-   </script>
-   
+		
 </body>
 
 </html>
