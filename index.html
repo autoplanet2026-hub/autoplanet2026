@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://wotoslngwrsddohowkba.supabase.co" crossorigin>
+    <link rel="preconnect" href="https://xasdwtlspuexreyqtifp.supabase.co" crossorigin>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.min.js"></script>
     <!-- Scripts diferidos: Alpine debe ir ÚLTIMO para que Chart.js y alertify ya estén cargados -->
@@ -425,8 +425,8 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://wotoslngwrsddohowkba.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvdG9zbG5nd3JzZGRvaG93a2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMDk5MTksImV4cCI6MjA5ODc4NTkxOX0.zvce9AmOBwPxmtOikfyT0FdbyGF0Szec-AZfTiYqzBs';
+        const SUPABASE_URL = 'https://xasdwtlspuexreyqtifp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhhc2R3dGxzcHVleHJleXF0aWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyODQ2MDksImV4cCI6MjExMDg2MDYwOX0.BYffuy97T_-Ri_ckBmtodUtPCehhFpF4IJoE6DaXSyM';
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         async function logout() {
@@ -841,6 +841,29 @@
         }
 
     </script>
+	
+	   <script>
+     // Asegúrate de que estas variables ya estén definidas con tus claves reales
+     // const supabaseUrl = 'TU_URL';
+     // const supabaseKey = 'TU_ANON_KEY';
+     // const supabase = createClient(supabaseUrl, supabaseKey);
+
+     async function probarConexion() {
+         console.log("🔄 Intentando conectar a Supabase...");
+         // Intentamos hacer una consulta simple a la tabla 'inventario'
+         const { data, error } = await supabase.from('inventario').select('*').limit(1);
+         
+         if (error) {
+             console.error("❌ Error de conexión o tabla:", error.message);
+         } else {
+             console.log("✅ ¡Conexión exitosa! Datos recibidos:", data);
+         }
+     }
+     
+     // Ejecutar la prueba cuando cargue la página
+     probarConexion();
+   </script>
+   
 </body>
 
 </html>
