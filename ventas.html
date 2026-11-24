@@ -257,7 +257,7 @@
             padding: 12px;
         }
 
-        .compact-mode .product-card .fa-tint {
+        .compact-mode .product-card .fa-box {
             font-size: 1.5rem !important;
         }
 
@@ -385,7 +385,7 @@
                 <div class="flex items-center space-x-3 mb-3">
                     <i class="fas fa-tint text-3xl"></i>
                     <div>
-                        <h1 class="text-xl font-bold">Auto Servicio</h1>
+                        <h1 class="text-xl font-bold">Servicios Agua Potable</h1>
                         <p class="text-xs text-blue-200">Sistema de Gestión</p>
                     </div>
                 </div>
@@ -447,7 +447,7 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold text-gray-800">Punto de Venta</h2>
-                    <p class="text-sm text-gray-500">Venta de agua potabilizada - Stock basado en tanques</p>
+                    <p class="text-sm text-gray-500">Punto de venta - Inventario por producto</p>
                 </div>
                 <div class="flex items-center space-x-4">
                     <div class="bg-blue-50 px-4 py-2 rounded-lg flex items-center space-x-2">
@@ -516,7 +516,7 @@
                 <div class="lg:hidden px-3 py-2 bg-white border-b sticky top-[57px] z-10 mb-3">
                     <div class="relative">
                         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                        <input type="text" x-model="productSearch" placeholder="Buscar producto..."
+                        <input type="text" x-model="productSearch" @keydown.enter.prevent="handleSearchEnter()" autocomplete="off" placeholder="Buscar producto o escanear código..."
                             class="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
                     </div>
                 </div>
@@ -524,7 +524,7 @@
                 <div class="hidden lg:block mb-6">
                     <div class="relative">
                         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                        <input type="text" x-model="productSearch" placeholder="Buscar producto..."
+                        <input type="text" x-model="productSearch" @keydown.enter.prevent="handleSearchEnter()" autocomplete="off" placeholder="Buscar producto o escanear código..."
                             class="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
                     </div>
                 </div>
@@ -542,24 +542,22 @@
                         <template x-for="product in filteredProducts" :key="product.id">
                             <button @click="addProduct(product)"
                                 class="product-card rounded-xl text-white p-3 lg:p-6 relative overflow-hidden" :class="{
-'bg-gradient-to-br from-cyan-400 to-cyan-600': product.size_liters === 5,
-'bg-gradient-to-br from-blue-400 to-blue-600': product.size_liters === 13,
-'bg-gradient-to-br from-indigo-500 to-indigo-700': product.size_liters === 20 && !/mayor/i.test(product.name),
-'bg-gradient-to-br from-green-300 to-green-500': /mayor/i.test(product.name),
-'bg-gradient-to-br from-amber-600 to-amber-800': product.product_type === 'empty_bottle' && product.size_liters === 15,
-'bg-gradient-to-br from-orange-600 to-orange-800': product.product_type === 'empty_bottle' && product.size_liters === 20,
-'low-stock': product.stock <= 10 && product.stock > 0,
-'opacity-50': product.stock === 0
+'bg-gradient-to-br from-blue-500 to-blue-700': product.stock > 0,
+'bg-gradient-to-br from-gray-400 to-gray-500': product.stock <= 0,
+'low-stock': product.stock > 0 && product.stock <= (product.min_stock || 10),
+'opacity-50': product.stock <= 0
 }">
                                 <div
                                     class="absolute top-2 right-2 bg-white/20 backdrop-blur px-1.5 py-0.5 rounded text-[10px] font-bold">
                                     <span x-text="product.stock"></span>
                                 </div>
                                 <div class="flex flex-col items-center text-center space-y-1">
-                                    <i class="fas fa-tint text-2xl lg:text-4xl mb-1"></i>
+                                    <i class="fas fa-box text-2xl lg:text-4xl mb-1"></i>
                                     <p class="font-bold text-sm lg:text-lg leading-tight" x-text="product.name"></p>
                                     <p class="text-xs lg:text-sm opacity-90 font-semibold"
                                         x-text="'$' + product.price.toFixed(2)"></p>
+                                    <p x-show="product.barcode" class="text-[10px] opacity-75 font-mono"
+                                        x-text="product.barcode"></p>
                                 </div>
                                 <div class="hidden lg:flex justify-center space-x-1 mt-4 pt-4 border-t border-white/20"
                                     @click.stop>
@@ -1971,7 +1969,7 @@
                 get filteredProducts() {
                     if (!this.productSearch) return this.products;
                     const search = this.productSearch.toLowerCase();
-                    return this.products.filter(p => p.name.toLowerCase().includes(search) || (p.size_liters && p.size_liters.toString().includes(search)));
+                    return this.products.filter(p => p.name.toLowerCase().includes(search) || (p.barcode && p.barcode.toLowerCase().includes(search)));
                 },
                 get subtotal() {
                     return round2(this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
@@ -2224,6 +2222,74 @@
                             this.clearCart();
                         }
                     });
+                    // ✅ Lector de código de barras
+                    this.setupBarcodeScanner();
+                },
+                // ✅ ENTER en el buscador: sirve para el lector de código de barras (que "teclea" el código
+                // y pulsa Enter) y también para buscar escribiendo.
+                handleSearchEnter() {
+                    const code = (this.productSearch || '').trim();
+                    if (!code) return;
+                    if (this.processScan(code)) {
+                        this.productSearch = '';
+                        return;
+                    }
+                    const matches = this.filteredProducts;
+                    if (matches.length === 1) {
+                        this.addProduct(matches[0]);
+                        this.productSearch = '';
+                    } else if (matches.length === 0) {
+                        showToast(`No se encontró: ${code}`, 'error');
+                        this.productSearch = '';
+                    } else {
+                        showToast('Hay varios resultados, selecciona el producto', 'info');
+                    }
+                },
+                // ✅ Busca por código de barras exacto y lo agrega al carrito (suma 1 si ya estaba)
+                processScan(rawCode) {
+                    const code = String(rawCode || '').trim().toLowerCase();
+                    if (!code) return false;
+                    const product = this.products.find(p => p.barcode && p.barcode.toLowerCase() === code);
+                    if (!product) return false;
+                    this.addProduct(product);
+                    return true;
+                },
+                // ✅ Detecta el lector aunque el cursor no esté en el buscador: un lector envía los
+                // caracteres muy rápido (pocos ms entre teclas) y termina con Enter.
+                setupBarcodeScanner() {
+                    let buffer = '';
+                    let lastKeyTime = 0;
+                    const MAX_GAP_MS = 80;
+                    const MIN_LENGTH = 4;
+                    document.addEventListener('keydown', (e) => {
+                        if (e.ctrlKey || e.altKey || e.metaKey) return;
+                        const el = document.activeElement;
+                        const tag = el ? el.tagName : '';
+                        const typingInField = el && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable);
+                        // Si hay un campo con foco (incluido el buscador), ese campo maneja su propio Enter
+                        if (typingInField || this.showCustomerModal || this.showCreditModal || document.body.classList.contains('swal2-shown')) {
+                            buffer = '';
+                            return;
+                        }
+                        const now = Date.now();
+                        if (e.key === 'Enter') {
+                            const isScan = buffer.length >= MIN_LENGTH && (now - lastKeyTime) <= MAX_GAP_MS * 2;
+                            const code = buffer;
+                            buffer = '';
+                            if (isScan) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (!this.processScan(code)) {
+                                    showToast(`Código no encontrado: ${code}`, 'error');
+                                }
+                            }
+                            return;
+                        }
+                        if (!e.key || e.key.length !== 1) return;
+                        if (now - lastKeyTime > MAX_GAP_MS) buffer = '';
+                        buffer += e.key;
+                        lastKeyTime = now;
+                    }, true);
                 },
                 goBack() {
                     window.location.href = 'index.html';
@@ -2292,23 +2358,27 @@
                     }
                 },
                 // ✅ FUNCIÓN ROBUSTA CON REINTENTOS Y LOGGING DETALLADO
+                // ✅ Inventario normal: stock real (inventory.quantity) y precio único por producto.
+                // Usa get_pos_products (ya no se usan tanques ni litros).
                 async loadProducts() {
                     this.loading = true;
                     const MAX_RETRIES = 3;
                     const RETRY_DELAY_MS = [100, 200, 400]; // Backoff exponencial
                     let lastError = null;
-                    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-                        try {
-                            console.log(`🔄 [Intento ${attempt}/${MAX_RETRIES}] Cargando productos para sucursal: ${this.userBranch}`);
-                            // Espera entre reintentos (excepto en el primer intento)
+                    try {
+                        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                             if (attempt > 1) {
-                                const delay = RETRY_DELAY_MS[attempt - 2];
-                                console.log(`⏳ Esperando ${delay}ms antes del reintento...`);
-                                await new Promise(resolve => setTimeout(resolve, delay));
+                                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS[attempt - 2]));
                             }
-                            const { data: virtualInventory, error } = await supabase.rpc('calculate_virtual_inventory', {
-                                branch_param: this.userBranch
-                            });
+                            let result;
+                            try {
+                                result = await supabase.rpc('get_pos_products', { branch_param: this.userBranch });
+                            } catch (err) {
+                                console.error(`❌ [Intento ${attempt}] Error inesperado:`, err);
+                                lastError = err;
+                                continue;
+                            }
+                            const { data, error } = result;
                             if (error) {
                                 console.error(`❌ [Intento ${attempt}] Error de Supabase:`, {
                                     code: error.code,
@@ -2318,66 +2388,32 @@
                                 });
                                 lastError = error;
                                 // Si es error de permisos o autenticación, no reintentar
-                                if (error.code === '42501' || error.code === 'PGRST301') {
-                                    console.error(' Error de permisos/autenticación - No reintentar');
-                                    break;
-                                }
-                                continue; // Reintentar
+                                if (error.code === '42501' || error.code === 'PGRST301') break;
+                                continue;
                             }
-                            console.log(`✅ [Intento ${attempt}] Datos recibidos: ${virtualInventory?.length || 0} registros`);
-                            if (!virtualInventory || virtualInventory.length === 0) {
-                                console.warn('⚠️ No hay inventario disponible para esta sucursal');
+                            if (!data || data.length === 0) {
                                 this.products = [];
-                                showToast('No hay productos en inventario', 'warning');
-                                return; // Éxito, pero sin datos
+                                showToast('No hay productos con precio en esta sucursal', 'warning');
+                                return;
                             }
-                            const productsToShow = virtualInventory.filter(item => {
-                                const stock = item.virtual_stock || item.stock || 0;
-                                const size = item.size_liters || item.size;
-                                const productType = item.product_type || item.type;
-                                const hasStock = stock > 0;
-                                const hasValidSize = size !== null && size !== undefined && size > 0;
-                                const isNotCap = productType !== 'cap';
-                                const isValidProduct = (productType === 'bottle' || productType === 'empty_bottle');
-                                // ✅ "Botellón al Mayor" solo se vende en Géminis
-                                const branchNorm = String(this.userBranch || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                                const isMayor = /mayor/i.test(item.product_name || item.name || '');
-                                const mayorAllowed = !isMayor || branchNorm === 'geminis';
-                                return hasStock && hasValidSize && isNotCap && isValidProduct && mayorAllowed;
-                            });
-                            console.log(`✅ Productos filtrados: ${productsToShow.length}`);
-                            this.products = productsToShow.map(item => {
-                                const stock = item.virtual_stock || item.stock || 0;
-                                const size = item.size_liters || item.size;
-                                const productType = item.product_type || item.type;
-                                return {
-                                    id: item.product_id, // ✅ FIX: id único real (antes 'size_'+size se repetía con 2 productos de 20L)
-                                    product_id: item.product_id,
-                                    name: item.product_name || item.name,
-                                    size_liters: size,
-                                    product_type: productType,
-                                    price: round2(parseFloat(item.price) || 0),
-                                    stock: parseInt(stock) || 0
-                                };
-                            });
-                            // ✅ "Botellón al Mayor" siempre al final (abajo a la derecha)
-                            this.products.sort((a, b) => (/mayor/i.test(a.name) ? 1 : 0) - (/mayor/i.test(b.name) ? 1 : 0));
-                            console.log(`✅ Productos cargados exitosamente: ${this.products.length}`);
-                            return; // Éxito total
-                        } catch (err) {
-                            console.error(`❌ [Intento ${attempt}] Error inesperado:`, err);
-                            lastError = err;
-                            if (attempt === MAX_RETRIES) {
-                                console.error('🚨 Todos los reintentos fallaron. Último error:', lastError);
-                                showToast('Error al cargar productos. Verifica tu conexión.', 'error');
-                                this.products = [];
-                            } else {
-                                showToast(`Reintentando... (${attempt}/${MAX_RETRIES})`, 'info');
-                            }
+                            this.products = data.map(item => ({
+                                id: item.product_id,
+                                product_id: item.product_id,
+                                name: item.product_name,
+                                barcode: item.barcode || '',
+                                description: item.description || '',
+                                price: round2(parseFloat(item.price) || 0),
+                                stock: parseInt(item.stock) || 0,
+                                min_stock: parseInt(item.min_stock) || 0
+                            }));
+                            return;
                         }
+                        console.error('🚨 No se pudieron cargar los productos. Último error:', lastError);
+                        showToast(lastError && lastError.message ? `Error al cargar productos: ${lastError.message}` : 'Error al cargar productos. Verifica tu conexión.', 'error');
+                        this.products = [];
+                    } finally {
+                        this.loading = false;
                     }
-                    // Si llegamos aquí, todos los intentos fallaron
-                    this.loading = false;
                 },
                 // ✅ OPTIMIZADO: select con columnas explícitas en vez de '*'.
                 // Solo se piden las columnas que realmente usa el frontend
@@ -2455,8 +2491,7 @@
                             id: product.id,
                             product_id: product.product_id,
                             name: product.name,
-                            size_liters: product.size_liters,
-                            product_type: product.product_type,
+                            barcode: product.barcode || '',
                             price: finalPrice,
                             originalPrice: product.price, // Guardar precio original
                             hasCustomPrice: hasCustomPrice, // Marcar si tiene precio personalizado
@@ -2495,8 +2530,7 @@
                             id: product.id,
                             product_id: product.product_id,
                             name: product.name,
-                            size_liters: product.size_liters,
-                            product_type: product.product_type,
+                            barcode: product.barcode || '',
                             price: finalPrice,
                             originalPrice: product.price,
                             hasCustomPrice: hasCustomPrice,
@@ -2804,7 +2838,7 @@
                         // ✅ CORRECCIÓN: Usar fecha de Caracas en lugar de UTC — SIN CAMBIOS
                         const caracasDate = getCaracasDate();
                         const rateDateStr = caracasDate.toISOString().split('T')[0];
-                        const { data: sale, error: saleError } = await supabase.from('sales').insert({
+                        const saleData = {
                             branch: this.userBranch,
                             customer_id: this.selectedCustomer || this.defaultCustomerId || null,
                             customer_name: customerName,
@@ -2819,10 +2853,21 @@
                             notes: notes.join('\n') || null,
                             exchange_rate_used: this.exchangeRate,
                             rate_date: rateDateStr, // ← AHORA USA FECHA DE CARACAS
-                            created_by: session.user.id,
                             sale_type: 'agua_potable'
-                        }).select().single();
+                        };
+                        // ✅ Venta + items + descuento de stock en UNA sola transacción
+                        const { data: saleResult, error: saleError } = await supabase.rpc('create_sale_with_items', {
+                            sale_data: saleData,
+                            items: this.cart.map(item => ({
+                                product_id: item.product_id,
+                                quantity: item.quantity,
+                                unit_price: item.price,
+                                total: round2(item.price * item.quantity)
+                            }))
+                        });
                         if (saleError) throw saleError;
+                        if (!saleResult || !saleResult.success) throw new Error('No se pudo registrar la venta');
+                        const sale = { id: saleResult.sale_id, sale_number: saleResult.sale_number };
                         if (this.deliveryType === 'delivery' && this.selectedCustomer) {
                             await this.updateCustomerAddress();
                         }
@@ -2866,134 +2911,6 @@
                             const { error: paymentsError } = await supabase.from('sale_payments').insert(paymentsToInsert);
                             if (paymentsError) {
                                 console.warn('⚠️ No se pudo guardar en sale_payments:', paymentsError.message);
-                            }
-                        }
-                        // ✅ OPTIMIZADO: select con columnas explícitas (ya estaba correcto, se conserva igual)
-                        const { data: productsFromDB } = await supabase.from('products').select('id, name, size_liters, product_type').eq('is_active', true);
-                        // ✅ FIX: Solo productos tipo 'bottle' para el mapeo de botellones con agua
-                        const bottleProducts = productsFromDB.filter(p => p.product_type === 'bottle');
-                        const sizeToProductId = {};
-                        bottleProducts.forEach(p => {
-                            if (p.size_liters) sizeToProductId[p.size_liters] = p.id;
-                        });
-                        const capProduct = productsFromDB.find(p => p.product_type === 'cap');
-                        const emptyBottleProducts = productsFromDB.filter(p => p.product_type === 'empty_bottle');
-                        const saleItems = this.cart.map(item => ({
-                            sale_id: sale.id,
-                            product_id: item.product_type === 'empty_bottle' ?
-                                (item.product_id || emptyBottleProducts.find(p => p.size_liters === item.size_liters)?.id || null) :
-                                (item.product_id || sizeToProductId[item.size_liters]),
-                            quantity: item.quantity,
-                            unit_price: item.price,
-                            total: round2(item.price * item.quantity)
-                        }));
-                        const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
-                        if (itemsError) throw itemsError;
-                        // ✅ DESCUENTO DE INVENTARIO - Simplificado y directo
-                        let totalCapsNeeded = 0;
-                        // ✅ BUCLE 1: Botellones CON AGUA (5L, 13L, 20L)
-                        for (const item of this.cart) {
-                            if (item.product_type !== 'empty_bottle') {
-                                const realProductId = item.product_id || sizeToProductId[item.size_liters];
-                                if (!realProductId) continue;
-                                console.log(`💧 Procesando botellón con agua ${item.size_liters}L - Cantidad: ${item.quantity}`);
-                                const { data: tankResult, error: tankError } = await supabase.rpc('sell_and_deduct_from_tank', {
-                                    branch_param: this.userBranch,
-                                    product_id_param: realProductId,
-                                    quantity_param: item.quantity,
-                                    user_id_param: session.user.id
-                                });
-                                if (tankError) throw tankError;
-                                if (!tankResult || !tankResult.success) throw new Error('Agua insuficiente');
-                                // Contar tapas para 13L y 20L con agua
-                                if (item.size_liters === 13 || item.size_liters === 20) {
-                                    totalCapsNeeded += item.quantity;
-                                    console.log(`🔴 Contando ${item.quantity} tapa(s) para botellón con agua ${item.size_liters}L`);
-                                }
-                            }
-                        }
-                        // ✅ BUCLE 2: Botellones VACÍOS (15L y 20L)
-                        for (const item of this.cart) {
-                            if (item.product_type === 'empty_bottle') {
-                                const emptyProduct = emptyBottleProducts.find(p => p.id === item.product_id) || emptyBottleProducts.find(p => p.size_liters === item.size_liters);
-                                if (!emptyProduct) continue;
-                                console.log(`🏺 Procesando botellón vacío ${item.size_liters}L - Cantidad: ${item.quantity}`);
-                                // ✅ NUEVO: Descontar agua del tanque (15L o 20L según el producto)
-                                const { data: tankResult, error: tankError } = await supabase.rpc('sell_and_deduct_from_tank', {
-                                    branch_param: this.userBranch,
-                                    product_id_param: emptyProduct.id, // ← ID del producto vacío (tiene size_liters = 15 o 20)
-                                    quantity_param: item.quantity,
-                                    user_id_param: session.user.id
-                                });
-                                if (tankError) {
-                                    console.warn('⚠️ Error descontando agua del tanque:', tankError.message);
-                                } else if (!tankResult || !tankResult.success) {
-                                    showToast(`️ Agua insuficiente en el tanque para ${item.size_liters}L`, 'warning');
-                                } else {
-                                    console.log(`✅ ${item.quantity * item.size_liters}L descontados del tanque (botellón vacío ${item.size_liters}L)`);
-                                }
-                                // Descontar del inventario físico (botellón vacío)
-                                const { data: emptyInventory, error: emptyInvError } = await supabase
-                                    .from('inventory')
-                                    .select('quantity')
-                                    .eq('product_id', emptyProduct.id)
-                                    .eq('branch', this.userBranch)
-                                    .single();
-                                if (emptyInvError) {
-                                    console.warn('️ Error consultando inventario de botellón vacío:', emptyInvError.message);
-                                } else if (emptyInventory) {
-                                    if (emptyInventory.quantity < item.quantity) {
-                                        showToast(`⚠️ Stock bajo de botellón vacío ${item.size_liters}L`, 'warning');
-                                    }
-                                    const { error: updateEmptyError } = await supabase
-                                        .from('inventory')
-                                        .update({
-                                            quantity: emptyInventory.quantity - item.quantity,
-                                            updated_at: new Date().toISOString()
-                                        })
-                                        .eq('product_id', emptyProduct.id)
-                                        .eq('branch', this.userBranch);
-                                    if (updateEmptyError) {
-                                        console.warn('⚠️ Error actualizando botellón vacío:', updateEmptyError.message);
-                                    } else {
-                                        console.log(`✅ ${item.quantity} botellón(es) vacío(s) ${item.size_liters}L descontado(s) del inventario`);
-                                    }
-                                }
-                                // Contar tapas para botellones vacíos de 15L y 20L
-                                if (item.size_liters === 15 || item.size_liters === 20) {
-                                    totalCapsNeeded += item.quantity;
-                                    console.log(`🔴 Contando ${item.quantity} tapa(s) para botellón vacío ${item.size_liters}L`);
-                                }
-                            }
-                        }
-                        // ✅ DESCUENTO DE TAPAS
-                        if (totalCapsNeeded > 0 && capProduct) {
-                            console.log(`🧢 Descontando ${totalCapsNeeded} tapas del inventario`);
-                            const { data: capInventory, error: capInventoryError } = await supabase
-                                .from('inventory')
-                                .select('quantity, product_id')
-                                .eq('product_id', capProduct.id)
-                                .eq('branch', this.userBranch)
-                                .single();
-                            if (capInventoryError) {
-                                console.warn('️ Error consultando inventario de tapas:', capInventoryError.message);
-                            } else if (capInventory) {
-                                if (capInventory.quantity < totalCapsNeeded) {
-                                    showToast(`⚠️ Stock de tapas bajo: ${capInventory.quantity} disponibles`, 'warning');
-                                }
-                                const { error: updateCapError } = await supabase
-                                    .from('inventory')
-                                    .update({
-                                        quantity: capInventory.quantity - totalCapsNeeded,
-                                        updated_at: new Date().toISOString()
-                                    })
-                                    .eq('product_id', capProduct.id)
-                                    .eq('branch', this.userBranch);
-                                if (updateCapError) {
-                                    console.warn('️ Error actualizando tapas:', updateCapError.message);
-                                } else {
-                                    console.log(`✅ ${totalCapsNeeded} tapas descontadas del inventario`);
-                                }
                             }
                         }
                         let successDetails = '';
@@ -3176,7 +3093,7 @@
                         // ✅ CORRECCIÓN: Usar fecha de Caracas para créditos también — SIN CAMBIOS
                         const caracasDate = getCaracasDate();
                         const rateDateStr = caracasDate.toISOString().split('T')[0];
-                        const { data: sale, error: saleError } = await supabase.from('sales').insert({
+                        const saleData = {
                             branch: this.userBranch,
                             customer_id: this.creditForm.customer_id,
                             customer_name: customer?.full_name,
@@ -3189,52 +3106,21 @@
     ${this.creditForm.notes || ''}`,
                             exchange_rate_used: this.exchangeRate,
                             rate_date: rateDateStr, // ← AHORA USA FECHA DE CARACAS
-                            created_by: session.user.id,
                             sale_type: 'agua_potable'
-                        }).select().single();
-                        if (saleError) throw saleError;
-                        // ✅ OPTIMIZADO: select con columnas explícitas (ya estaba correcto, se conserva igual)
-                        const { data: productsFromDB } = await supabase.from('products').select('id, name, size_liters, product_type').eq('is_active', true);
-                        // ✅ FIX: Solo productos tipo 'bottle' para el mapeo de botellones con agua
-                        const bottleProducts = productsFromDB.filter(p => p.product_type === 'bottle');
-                        const sizeToProductId = {};
-                        bottleProducts.forEach(p => {
-                            if (p.size_liters) sizeToProductId[p.size_liters] = p.id;
+                        };
+                        // ✅ Venta + items + descuento de stock en UNA sola transacción
+                        const { data: saleResult, error: saleError } = await supabase.rpc('create_sale_with_items', {
+                            sale_data: saleData,
+                            items: this.cart.map(item => ({
+                                product_id: item.product_id,
+                                quantity: item.quantity,
+                                unit_price: item.price,
+                                total: round2(item.price * item.quantity)
+                            }))
                         });
-                        const capProduct = productsFromDB.find(p => p.product_type === 'cap');
-                        const saleItems = this.cart.map(item => ({
-                            sale_id: sale.id,
-                            product_id: item.product_id || sizeToProductId[item.size_liters],
-                            quantity: item.quantity,
-                            unit_price: item.price,
-                            total: round2(item.price * item.quantity)
-                        }));
-                        const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
-                        if (itemsError) throw itemsError;
-                        let totalCapsNeeded = 0;
-                        for (const item of this.cart) {
-                            const realProductId = item.product_id || sizeToProductId[item.size_liters];
-                            if (!realProductId) continue;
-                            const { data: tankResult, error: tankError } = await supabase.rpc('sell_and_deduct_from_tank', {
-                                branch_param: this.userBranch,
-                                product_id_param: realProductId,
-                                quantity_param: item.quantity,
-                                user_id_param: session.user.id
-                            });
-                            if (tankError) throw tankError;
-                            if (item.size_liters === 13 || item.size_liters === 20) {
-                                totalCapsNeeded += item.quantity;
-                            }
-                        }
-                        if (totalCapsNeeded > 0 && capProduct) {
-                            const { data: capInventory } = await supabase.from('inventory').select('quantity').eq('product_id', capProduct.id).eq('branch', this.userBranch).single();
-                            if (capInventory) {
-                                await supabase.from('inventory').update({
-                                    quantity: capInventory.quantity - totalCapsNeeded,
-                                    updated_at: new Date().toISOString()
-                                }).eq('product_id', capProduct.id).eq('branch', this.userBranch);
-                            }
-                        }
+                        if (saleError) throw saleError;
+                        if (!saleResult || !saleResult.success) throw new Error('No se pudo registrar la venta');
+                        const sale = { id: saleResult.sale_id, sale_number: saleResult.sale_number };
                         if (creditAmount > 0) {
                             await supabase.from('credit_accounts').insert({
                                 sale_id: sale.id,
