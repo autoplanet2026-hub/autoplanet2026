@@ -174,10 +174,18 @@
         .animate-bounce-in {
             animation: bounce-in 0.4s ease-out;
         }
+    
+        /* ---- Inventario profesional ---- */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        button:disabled { cursor: not-allowed; }
     </style>
 </head>
 
-<body class="bg-gray-50" x-data="inventarioApp()" x-init="initInventario()">
+<body class="bg-gray-50" :class="{ 'overflow-hidden': anyModalOpen }" x-data="inventarioApp()" x-init="initInventario()">
 
     <!-- Overlay para móvil -->
     <div class="sidebar-overlay" :class="{ 'show': mobileMenuOpen }" @click="mobileMenuOpen = false"></div>
@@ -246,450 +254,673 @@
     <!-- Main Content -->
     <div class="lg:ml-64 min-h-screen">
         <!-- Header -->
-        <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center space-x-4">
-                <button @click="mobileMenuOpen = !mobileMenuOpen"
+        <header class="bg-white border-b px-4 sm:px-6 py-4 flex justify-between items-center sticky top-0 z-30">
+            <div class="flex items-center gap-3 min-w-0">
+                <button @click="mobileMenuOpen = !mobileMenuOpen" aria-label="Abrir menú"
                     class="menu-toggle lg:hidden text-gray-600 hover:text-gray-800">
                     <i class="fas fa-bars text-2xl"></i>
                 </button>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800">Inventario</h2>
-                    <p class="text-sm text-gray-500"
-                        x-text="'Control de productos y tanques - ' + (selectedBranch === 'all' ? 'Consolidado' : userBranch) + ' | ' + DateUtils.formatDateLong(new Date())">
-                    </p>
+                <div class="min-w-0">
+                    <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Inventario</h2>
+                    <p class="text-sm text-gray-500 truncate" x-text="subtitle"></p>
                 </div>
             </div>
-            <div class="flex items-center space-x-2">
-                <!-- Dropdown de Sucursales (Solo Admin) -->
-                <div x-show="userRole === 'admin'" class="hidden md:block mr-2">
-                    <select x-model="selectedBranch" @change="refreshInventory()"
-                        class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm">
-                        <option value="all">🌐 Todas las Sucursales (Consolidado)</option>
-                        <template x-for="branch in availableBranches" :key="branch">
-                            <option :value="branch" x-text="branch.charAt(0).toUpperCase() + branch.slice(1)"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <button @click="openManageInventoryModal()"
-                    class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button x-show="canManage" @click="openProductModal()"
+                    class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm">
                     <i class="fas fa-plus"></i>
-                    <span class="hidden sm:inline">Gestionar Inventario</span>
-                </button>
-                <button @click="openRefillTankModal()"
-                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
-                    <i class="fas fa-plus"></i>
-                    <span class="hidden sm:inline">Recargar Tanque</span>
-                </button>
-                <button @click="openFillBottlesModal()"
-                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
-                    <i class="fas fa-tint"></i>
-                    <span class="hidden sm:inline">Llenar Botellones</span>
+                    <span class="hidden sm:inline">Nuevo producto</span>
                 </button>
                 <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
-                    <i class="fas fa-sign-out-alt mr-2"></i>Salir
+                    <i class="fas fa-sign-out-alt sm:mr-2"></i><span class="hidden sm:inline">Salir</span>
                 </button>
             </div>
         </header>
 
-        <!-- Content -->
-        <main class="p-6">
-            <div x-show="loading" class="text-center py-12">
-                <i class="fas fa-circle-notch fa-spin text-4xl text-blue-500"></i>
+        <main class="p-4 sm:p-6 max-w-7xl mx-auto">
+            <!-- Cargando -->
+            <div x-show="loading" class="text-center py-16">
+                <i class="fas fa-circle-notch fa-spin text-4xl text-sky-500"></i>
                 <p class="mt-4 text-gray-600">Cargando inventario...</p>
             </div>
 
-            <div x-show="!loading">
-                <!-- Info Box -->
-                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-                    <div class="flex items-start">
-                        <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
-                        <div>
-                            <h4 class="font-semibold text-blue-900">Inventario Virtual y Físico</h4>
-                            <p class="text-sm text-blue-700 mt-1">
-                                El inventario de botellones con agua se calcula automáticamente basado en el agua
-                                disponible en los tanques.
-                                Los botellones vacíos y tapas se gestionan por stock físico real.
-                            </p>
+            <div x-show="!loading" x-cloak>
+                <!-- Indicadores -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                    <button type="button" @click="clearFilters(); tab = 'productos'"
+                        class="text-left bg-white border rounded-xl p-4 hover:shadow-md transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium uppercase tracking-wide text-gray-500">Productos</span>
+                            <span class="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center"><i class="fas fa-box"></i></span>
                         </div>
+                        <p class="mt-2 text-2xl font-bold text-gray-900 tabular-nums" x-text="kpis.products"></p>
+                    </button>
+                    <div class="text-left bg-white border rounded-xl p-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium uppercase tracking-wide text-gray-500">Unidades en stock</span>
+                            <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fas fa-cubes"></i></span>
+                        </div>
+                        <p class="mt-2 text-2xl font-bold text-gray-900 tabular-nums" x-text="kpis.units"></p>
+                    </div>
+                    <button type="button" @click="tab = 'productos'; statusFilter = 'low'"
+                        class="text-left bg-white border rounded-xl p-4 hover:shadow-md transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium uppercase tracking-wide text-gray-500">Stock bajo</span>
+                            <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fas fa-triangle-exclamation"></i></span>
+                        </div>
+                        <p class="mt-2 text-2xl font-bold text-amber-600 tabular-nums" x-text="kpis.low"></p>
+                    </button>
+                    <button type="button" @click="tab = 'productos'; statusFilter = 'out'"
+                        class="text-left bg-white border rounded-xl p-4 hover:shadow-md transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium uppercase tracking-wide text-gray-500">Agotados</span>
+                            <span class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center"><i class="fas fa-ban"></i></span>
+                        </div>
+                        <p class="mt-2 text-2xl font-bold text-red-600 tabular-nums" x-text="kpis.out"></p>
+                    </button>
+                </div>
+
+                <!-- Pestañas -->
+                <div class="flex items-center justify-between border-b mb-4 gap-3">
+                    <nav class="flex gap-6 -mb-px">
+                        <button @click="tab = 'productos'"
+                            :class="tab === 'productos' ? 'border-sky-500 text-sky-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                            class="py-3 border-b-2 text-sm font-semibold">Productos</button>
+                        <button @click="openMovementsTab()"
+                            :class="tab === 'movimientos' ? 'border-sky-500 text-sky-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                            class="py-3 border-b-2 text-sm font-semibold">Movimientos</button>
+                    </nav>
+                    <div class="flex items-center gap-2 pb-2">
+                        <span class="hidden md:inline-flex items-center gap-1.5 text-xs text-gray-500" title="Escanea un producto en cualquier momento">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>Lector listo
+                        </span>
+                        <button x-show="canManage && tab === 'productos'" @click="openCategoriesModal()"
+                            class="px-3 py-1.5 border rounded-lg text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <i class="fas fa-tags text-gray-400"></i><span class="hidden sm:inline">Categorías</span>
+                        </button>
+                        <button x-show="tab === 'productos'" @click="exportCsv()"
+                            class="px-3 py-1.5 border rounded-lg text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <i class="fas fa-file-export text-gray-400"></i><span class="hidden sm:inline">Exportar</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- Virtual Inventory Cards - SIN ETIQUETAS -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <template x-for="item in virtualInventory" :key="item.product_id + '_' + item.branch">
-                        <div class="bg-white rounded-2xl shadow-sm p-6 border-t-4" :class="{
-                                'border-cyan-500': item.size_liters === 5,
-                                'border-blue-500': item.size_liters === 13,
-                                'border-blue-700': item.size_liters === 20,
-                                'border-amber-500': item.product_type === 'empty_bottle' && item.size_liters === 15,
-                                'border-orange-500': item.product_type === 'empty_bottle' && item.size_liters === 20,
-                                'border-purple-500': item.product_type === 'cap'
-                            }">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="w-16 h-16 rounded-full flex items-center justify-center" :class="{
-                                        'bg-cyan-100': item.size_liters === 5,
-                                        'bg-blue-100': item.size_liters === 13 || item.size_liters === 20,
-                                        'bg-amber-100': item.product_type === 'empty_bottle' && item.size_liters === 15,
-                                        'bg-orange-100': item.product_type === 'empty_bottle' && item.size_liters === 20,
-                                        'bg-purple-100': item.product_type === 'cap'
-                                    }">
-                                    <i class="fas text-3xl" :class="{
-                                        'fa-tint': item.size_liters === 5 || item.size_liters === 13 || item.size_liters === 20,
-                                        'fa-box': item.product_type === 'empty_bottle',
-                                        'fa-circle': item.product_type === 'cap'
-                                    }" :style="{
-                                        color: item.size_liters === 5 ? '#0891b2' : 
-                                               item.size_liters === 13 ? '#3b82f6' : 
-                                               item.size_liters === 20 ? '#1d4ed8' : 
-                                               item.product_type === 'cap' ? '#9333ea' : '#d97706'
-                                    }"></i>
-                                </div>
-                                <span
-                                    class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">Disponible</span>
-                            </div>
-                            <h3 class="text-lg font-semibold text-gray-800" x-text="item.product_name"></h3>
-                            <p class="text-4xl font-bold text-gray-900 mt-2" x-text="item.virtual_stock"></p>
-                            <p class="text-sm text-gray-500 mt-1"
-                                x-text="item.product_type === 'cap' || item.product_type === 'empty_bottle' ? 'unidades disponibles' : 'botellones disponibles'">
-                            </p>
+                <!-- ===================== PRODUCTOS ===================== -->
+                <div x-show="tab === 'productos'">
+                    <!-- Búsqueda y filtros -->
+                    <div class="flex flex-col lg:flex-row gap-3 mb-3">
+                        <div class="relative flex-1">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" x-model="search" @keydown.enter.prevent="onSearchEnter()" autocomplete="off"
+                                placeholder="Buscar por nombre o escanear código de barras..."
+                                class="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                            <button x-show="search" @click="search = ''" aria-label="Limpiar búsqueda"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
-                    </template>
-                </div>
+                        <div class="flex gap-3">
+                            <select x-model="statusFilter" aria-label="Filtrar por estado"
+                                class="flex-1 lg:flex-none px-3 py-2.5 border border-gray-300 rounded-xl bg-white text-sm focus:ring-2 focus:ring-sky-500">
+                                <option value="all">Todos los activos</option>
+                                <option value="low">Stock bajo</option>
+                                <option value="out">Agotados</option>
+                                <option value="nobarcode">Sin código de barras</option>
+                                <option value="noprice">Sin precio</option>
+                                <option value="inactive">Inactivos</option>
+                            </select>
+                            <select x-model="sortBy" aria-label="Ordenar"
+                                class="flex-1 lg:flex-none px-3 py-2.5 border border-gray-300 rounded-xl bg-white text-sm focus:ring-2 focus:ring-sky-500">
+                                <option value="name">Nombre A-Z</option>
+                                <option value="stock">Menor stock primero</option>
+                                <option value="updated">Actualizados recientemente</option>
+                            </select>
+                        </div>
+                    </div>
 
-                <!-- Water Tanks -->
-                <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center justify-between">
-                        <span class="flex items-center">
-                            <i class="fas fa-database text-blue-500 mr-2"></i>
-                            Tanques de Almacenamiento
-                        </span>
-                        <button @click="openRefillTankModal()"
-                            class="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg">
-                            <i class="fas fa-plus mr-1"></i>Recargar
+                    <!-- Categorías -->
+                    <div class="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-4" x-show="activeCategories.length > 0">
+                        <button @click="categoryFilter = 'all'"
+                            :class="categoryFilter === 'all' ? 'bg-sky-500 text-white border-sky-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                            class="px-3 py-1.5 rounded-full text-sm border whitespace-nowrap">
+                            Todas <span class="opacity-70" x-text="'(' + categoryCounts.all + ')'"></span>
                         </button>
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <template x-for="tank in tanks" :key="tank.id">
-                            <div class="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
-                                <div class="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h4 class="font-semibold text-gray-800" x-text="tank.name"></h4>
-                                        <p class="text-sm text-gray-500"
-                                            x-text="'Capacidad: ' + tank.capacity_liters.toLocaleString() + 'L'"></p>
+                        <template x-for="c in activeCategories" :key="c.id">
+                            <button @click="categoryFilter = c.id"
+                                :class="categoryFilter === c.id ? 'bg-sky-500 text-white border-sky-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                                class="px-3 py-1.5 rounded-full text-sm border whitespace-nowrap">
+                                <span x-text="c.name"></span> <span class="opacity-70" x-text="'(' + (categoryCounts[c.id] || 0) + ')'"></span>
+                            </button>
+                        </template>
+                        <button x-show="categoryCounts.none > 0" @click="categoryFilter = 'none'"
+                            :class="categoryFilter === 'none' ? 'bg-sky-500 text-white border-sky-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                            class="px-3 py-1.5 rounded-full text-sm border whitespace-nowrap">
+                            Sin categoría <span class="opacity-70" x-text="'(' + categoryCounts.none + ')'"></span>
+                        </button>
+                    </div>
+
+                    <!-- Vacío: sin productos -->
+                    <div x-show="products.length === 0" class="bg-white border rounded-xl py-16 px-6 text-center">
+                        <div class="w-16 h-16 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-box-open text-2xl"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800">Aún no hay productos</h3>
+                        <p class="text-sm text-gray-500 mt-1 mb-5">Crea tu primer producto para empezar a controlar el inventario.</p>
+                        <button x-show="canManage" @click="openProductModal()"
+                            class="bg-sky-500 hover:bg-sky-600 text-white px-5 py-2.5 rounded-lg font-medium">
+                            <i class="fas fa-plus mr-2"></i>Nuevo producto
+                        </button>
+                    </div>
+
+                    <!-- Vacío: sin resultados -->
+                    <div x-show="products.length > 0 && filteredProducts.length === 0" class="bg-white border rounded-xl py-12 px-6 text-center">
+                        <i class="fas fa-magnifying-glass text-3xl text-gray-300 mb-3"></i>
+                        <p class="font-medium text-gray-700">No se encontraron productos</p>
+                        <button x-show="hasFilters" @click="clearFilters()" class="mt-3 text-sm text-sky-600 hover:underline">Quitar filtros</button>
+                    </div>
+
+                    <!-- Tabla (escritorio) -->
+                    <div x-show="filteredProducts.length > 0" class="hidden md:block bg-white border rounded-xl overflow-hidden">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                                <tr>
+                                    <th class="text-left px-4 py-3 font-semibold">Producto</th>
+                                    <th class="text-left px-4 py-3 font-semibold">Categoría</th>
+                                    <th class="text-left px-4 py-3 font-semibold">Código de barras</th>
+                                    <th class="text-right px-4 py-3 font-semibold">Precio</th>
+                                    <th class="text-center px-4 py-3 font-semibold">Stock</th>
+                                    <th class="text-right px-4 py-3 font-semibold">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <template x-for="p in visibleProducts" :key="p.product_id">
+                                    <tr class="hover:bg-gray-50" :class="{ 'opacity-60': !p.is_active }">
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-medium text-gray-900" x-text="p.product_name"></span>
+                                                <span x-show="!p.is_active" class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-[10px] font-semibold uppercase">Inactivo</span>
+                                            </div>
+                                            <div x-show="p.description" class="text-xs text-gray-500 truncate max-w-xs" x-text="p.description"></div>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-600" x-text="p.category_name || '—'"></td>
+                                        <td class="px-4 py-3">
+                                            <span x-show="p.barcode" class="font-mono text-xs bg-gray-100 text-gray-700 rounded px-2 py-1" x-text="p.barcode"></span>
+                                            <button x-show="!p.barcode && canManage" @click="openProductModal(p, true)"
+                                                class="text-xs text-sky-600 hover:underline">
+                                                <i class="fas fa-barcode mr-1"></i>Asignar código
+                                            </button>
+                                            <span x-show="!p.barcode && !canManage" class="text-xs text-gray-400">—</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-right tabular-nums" :class="p.price === null ? 'text-amber-600 font-medium' : 'text-gray-800'" x-text="priceLabel(p)"></td>
+                                        <td class="px-4 py-3 text-center">
+                                            <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums" :class="stockBadge(p)" x-text="p.stock"></span>
+                                            <div x-show="p.min_stock > 0" class="text-[11px] text-gray-400 mt-0.5" x-text="'mín. ' + p.min_stock"></div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center justify-end gap-1.5">
+                                                <button @click="openMovement(p, 'entrada')" title="Agregar stock"
+                                                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
+                                                    <i class="fas fa-plus mr-1"></i>Entrada
+                                                </button>
+                                                <button @click="openMovement(p, 'salida')" :disabled="p.stock <= 0" title="Descontar stock"
+                                                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                                                    <i class="fas fa-minus mr-1"></i>Salida
+                                                </button>
+                                                <button @click="openHistory(p)" title="Historial" aria-label="Historial"
+                                                    class="w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100">
+                                                    <i class="fas fa-clock-rotate-left"></i>
+                                                </button>
+                                                <button x-show="canManage" @click="openProductModal(p)" title="Editar" aria-label="Editar"
+                                                    class="w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100">
+                                                    <i class="fas fa-pen"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tarjetas (móvil) -->
+                    <div x-show="filteredProducts.length > 0" class="md:hidden space-y-3">
+                        <template x-for="p in visibleProducts" :key="'m' + p.product_id">
+                            <div class="bg-white border rounded-xl p-4" :class="{ 'opacity-60': !p.is_active }">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="font-semibold text-gray-900" x-text="p.product_name"></p>
+                                        <p class="text-xs text-gray-500 mt-0.5">
+                                            <span x-text="p.category_name || 'Sin categoría'"></span> ·
+                                            <span :class="p.price === null ? 'text-amber-600 font-medium' : ''" x-text="priceLabel(p)"></span>
+                                            <span x-show="!p.is_active"> · Inactivo</span>
+                                        </p>
+                                        <p x-show="p.barcode" class="text-xs font-mono text-gray-500 mt-1" x-text="p.barcode"></p>
+                                        <button x-show="!p.barcode && canManage" @click="openProductModal(p, true)"
+                                            class="text-xs text-sky-600 mt-1"><i class="fas fa-barcode mr-1"></i>Asignar código</button>
                                     </div>
-                                    <span class="px-3 py-1 rounded-full text-xs font-semibold" :class="{
-                                            'bg-green-100 text-green-800': (tank.current_liters / tank.capacity_liters) > 0.7,
-                                            'bg-yellow-100 text-yellow-800': (tank.current_liters / tank.capacity_liters) > 0.4 && (tank.current_liters / tank.capacity_liters) <= 0.7,
-                                            'bg-red-100 text-red-800': (tank.current_liters / tank.capacity_liters) <= 0.4
-                                        }"
-                                        x-text="Math.round((tank.current_liters / tank.capacity_liters) * 100) + '%'"></span>
-                                </div>
-                                <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
-                                    <div class="h-4 rounded-full transition-all duration-500" :class="{
-                                            'bg-gradient-to-r from-blue-400 to-blue-600': (tank.current_liters / tank.capacity_liters) > 0.7,
-                                            'bg-gradient-to-r from-yellow-400 to-yellow-600': (tank.current_liters / tank.capacity_liters) > 0.4 && (tank.current_liters / tank.capacity_liters) <= 0.7,
-                                            'bg-gradient-to-r from-red-400 to-red-600': (tank.current_liters / tank.capacity_liters) <= 0.4
-                                        }"
-                                        :style="'width: ' + ((tank.current_liters / tank.capacity_liters) * 100) + '%'">
+                                    <div class="text-right flex-shrink-0">
+                                        <span class="inline-flex px-3 py-1 rounded-full text-sm font-bold tabular-nums" :class="stockBadge(p)" x-text="p.stock"></span>
+                                        <div x-show="p.min_stock > 0" class="text-[11px] text-gray-400 mt-0.5" x-text="'mín. ' + p.min_stock"></div>
                                     </div>
                                 </div>
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-600"
-                                        x-text="tank.current_liters.toLocaleString() + 'L disponibles'"></span>
-                                    <span class="font-semibold" :class="{
-                                            'text-blue-600': (tank.current_liters / tank.capacity_liters) > 0.7,
-                                            'text-yellow-600': (tank.current_liters / tank.capacity_liters) > 0.4 && (tank.current_liters / tank.capacity_liters) <= 0.7,
-                                            'text-red-600': (tank.current_liters / tank.capacity_liters) <= 0.4
-                                        }"
-                                        x-text="(tank.capacity_liters - tank.current_liters).toLocaleString() + 'L usados'"></span>
-                                </div>
-                                <div class="mt-2 text-xs text-gray-500" x-show="tank.current_liters < tank.min_level">
-                                    <i class="fas fa-exclamation-triangle text-red-500 mr-1"></i>
-                                    Nivel bajo - Mínimo recomendado: <span x-text="tank.min_level + 'L'"></span>
+                                <div class="grid grid-cols-4 gap-2 mt-3">
+                                    <button @click="openMovement(p, 'entrada')"
+                                        class="py-2 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700"><i class="fas fa-plus mr-1"></i>Entrada</button>
+                                    <button @click="openMovement(p, 'salida')" :disabled="p.stock <= 0"
+                                        class="py-2 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 disabled:opacity-40"><i class="fas fa-minus mr-1"></i>Salida</button>
+                                    <button @click="openHistory(p)" class="py-2 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700"><i class="fas fa-clock-rotate-left"></i></button>
+                                    <button @click="openProductModal(p)" :disabled="!canManage"
+                                        class="py-2 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 disabled:opacity-40"><i class="fas fa-pen"></i></button>
                                 </div>
                             </div>
                         </template>
+                    </div>
 
-                        <div x-show="tanks.length === 0" class="col-span-full text-center py-8 text-gray-400">
-                            <i class="fas fa-database text-4xl mb-2"></i>
-                            <p>No hay tanques registrados</p>
-                        </div>
+                    <!-- Mostrar más -->
+                    <div x-show="filteredProducts.length > visibleCount" class="text-center mt-4">
+                        <button @click="visibleCount += 60"
+                            class="px-5 py-2 border rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50">
+                            Mostrar más (<span x-text="filteredProducts.length - visibleCount"></span> restantes)
+                        </button>
                     </div>
                 </div>
 
-                <!-- Distribution Info -->
-                <div class="bg-white rounded-2xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Distribución del Agua</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="font-semibold text-blue-900">20 Litros</h4>
-                                <span class="text-2xl font-bold text-blue-600">70%</span>
-                            </div>
-                            <p class="text-sm text-blue-700">
-                                <span x-text="Math.round(totalWater * 0.70).toLocaleString()"></span>L disponibles
-                            </p>
-                            <p class="text-2xl font-bold text-blue-900 mt-2"
-                                x-text="Math.round((totalWater * 0.70) / 20) + ' botellones'"></p>
-                        </div>
-
-                        <div class="bg-cyan-50 rounded-xl p-4 border-2 border-cyan-200">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="font-semibold text-cyan-900">5 Litros</h4>
-                                <span class="text-2xl font-bold text-cyan-600">20%</span>
-                            </div>
-                            <p class="text-sm text-cyan-700">
-                                <span x-text="Math.round(totalWater * 0.20).toLocaleString()"></span>L disponibles
-                            </p>
-                            <p class="text-2xl font-bold text-cyan-900 mt-2"
-                                x-text="Math.round((totalWater * 0.20) / 5) + ' botellones'"></p>
-                        </div>
-
-                        <div class="bg-indigo-50 rounded-xl p-4 border-2 border-indigo-200">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="font-semibold text-indigo-900">13 Litros</h4>
-                                <span class="text-2xl font-bold text-indigo-600">10%</span>
-                            </div>
-                            <p class="text-sm text-indigo-700">
-                                <span x-text="Math.round(totalWater * 0.10).toLocaleString()"></span>L disponibles
-                            </p>
-                            <p class="text-2xl font-bold text-indigo-900 mt-2"
-                                x-text="Math.round((totalWater * 0.10) / 13) + ' botellones'"></p>
-                        </div>
+                <!-- ===================== MOVIMIENTOS ===================== -->
+                <div x-show="tab === 'movimientos'">
+                    <div class="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-4">
+                        <template x-for="f in [['all','Todos'],['entrada','Entradas'],['salida','Salidas'],['venta','Ventas'],['ajuste','Ajustes']]" :key="f[0]">
+                            <button @click="movementFilter = f[0]"
+                                :class="movementFilter === f[0] ? 'bg-sky-500 text-white border-sky-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                                class="px-3 py-1.5 rounded-full text-sm border whitespace-nowrap" x-text="f[1]"></button>
+                        </template>
+                        <button @click="loadMovements()" class="ml-auto px-3 py-1.5 rounded-full text-sm border bg-white text-gray-600 hover:bg-gray-50 whitespace-nowrap">
+                            <i class="fas fa-rotate" :class="{ 'fa-spin': movementsLoading }"></i> Actualizar
+                        </button>
                     </div>
+
+                    <div x-show="movementsLoading && movements.length === 0" class="text-center py-12 text-gray-500">
+                        <i class="fas fa-circle-notch fa-spin text-2xl text-sky-500"></i>
+                    </div>
+
+                    <div x-show="!movementsLoading && filteredMovements.length === 0" class="bg-white border rounded-xl py-12 text-center text-gray-500">
+                        <i class="fas fa-clock-rotate-left text-3xl text-gray-300 mb-3"></i>
+                        <p>Todavía no hay movimientos registrados.</p>
+                    </div>
+
+                    <div x-show="filteredMovements.length > 0" class="bg-white border rounded-xl overflow-x-auto">
+                        <table class="w-full text-sm min-w-[720px]">
+                            <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                                <tr>
+                                    <th class="text-left px-4 py-3 font-semibold">Fecha</th>
+                                    <th class="text-left px-4 py-3 font-semibold">Producto</th>
+                                    <th class="text-left px-4 py-3 font-semibold">Tipo</th>
+                                    <th class="text-right px-4 py-3 font-semibold">Cantidad</th>
+                                    <th class="text-center px-4 py-3 font-semibold">Stock</th>
+                                    <th class="text-left px-4 py-3 font-semibold">Motivo</th>
+                                    <th class="text-left px-4 py-3 font-semibold">Usuario</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <template x-for="m in filteredMovements" :key="m.id">
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 text-gray-600 whitespace-nowrap" x-text="fmtDateTime(m.created_at)"></td>
+                                        <td class="px-4 py-3 font-medium text-gray-900" x-text="productName(m.product_id)"></td>
+                                        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-semibold" :class="typeClass(m.movement_type)" x-text="typeLabel(m.movement_type)"></span></td>
+                                        <td class="px-4 py-3 text-right font-semibold tabular-nums" :class="m.quantity > 0 ? 'text-emerald-600' : 'text-rose-600'" x-text="(m.quantity > 0 ? '+' : '') + m.quantity"></td>
+                                        <td class="px-4 py-3 text-center text-gray-600 tabular-nums" x-text="m.stock_before + ' → ' + m.stock_after"></td>
+                                        <td class="px-4 py-3 text-gray-600">
+                                            <span x-text="m.reason || '—'"></span>
+                                            <span x-show="m.notes" class="block text-xs text-gray-400" x-text="m.notes"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-600 whitespace-nowrap" x-text="m.user_name"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p x-show="movements.length >= 200" class="text-xs text-gray-400 mt-2 text-center">Se muestran los últimos 200 movimientos.</p>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal Gestionar Inventario -->
-    <div x-show="showManageInventoryModal" x-cloak
-        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-        @click.self="closeManageInventoryModal()">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-bounce-in"
-            @click.stop>
-            <div class="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
-                <h3 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-boxes text-purple-600 mr-2"></i>Gestionar Inventario
-                </h3>
-                <button @click="closeManageInventoryModal()" class="text-gray-400 hover:text-gray-600 touch-btn p-2">
+    <!-- ================= Modal: Producto (crear / editar) ================= -->
+    <div x-show="productModal.open" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        @click.self="closeProductModal()">
+        <form @submit.prevent="saveProduct()"
+            class="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-800" x-text="productModal.form.id ? 'Editar producto' : 'Nuevo producto'"></h3>
+                <button type="button" @click="closeProductModal()" aria-label="Cerrar" class="text-gray-400 hover:text-gray-600 p-2">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
 
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 overflow-y-auto">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
-                    <select x-model="manageForm.productId" @change="loadProductData()"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500">
-                        <option value="">Seleccionar producto...</option>
-                        <template x-for="item in virtualInventory" :key="item.product_id">
-                            <option :value="item.product_id"
-                                x-text="item.product_name + ' (Stock: ' + item.virtual_stock + ')'"></option>
-                        </template>
-                    </select>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                    <input x-ref="nameInput" type="text" x-model="productModal.form.name" maxlength="120" autocomplete="off"
+                        placeholder="Ej: Batería 12V 45Ah"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad a Agregar *</label>
-                    <input type="number" x-model.number="manageForm.quantity" step="1" min="1"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
-                        placeholder="Ej: 50">
-                    <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Se sumará al stock actual
-                    </p>
-                </div>
-
-                <div x-show="selectedProduct" class="bg-purple-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-purple-900 mb-2">Información del Producto</h4>
-                    <div class="space-y-1 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">Producto:</span>
-                            <span class="font-semibold" x-text="selectedProduct?.product_name"></span>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Código de barras</label>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <i class="fas fa-barcode absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input x-ref="barcodeInput" type="text" x-model="productModal.form.barcode" autocomplete="off"
+                                @keydown.enter.prevent="onBarcodeCaptured()"
+                                placeholder="Escanea o escribe el código"
+                                class="w-full pl-10 pr-3 py-2.5 border rounded-lg font-mono focus:ring-2 focus:ring-sky-500"
+                                :class="barcodeOwner ? 'border-red-400' : 'border-gray-300'">
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">Stock actual:</span>
-                            <span class="font-semibold" x-text="selectedProduct?.virtual_stock"></span>
-                        </div>
-                        <div class="flex justify-between pt-2 border-t border-purple-200">
-                            <span class="text-gray-800 font-semibold">Nuevo stock:</span>
-                            <span class="font-bold text-green-600"
-                                x-text="(selectedProduct?.virtual_stock || 0) + (manageForm.quantity || 0)"></span>
-                        </div>
+                        <button type="button" @click="focusBarcode()"
+                            class="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 whitespace-nowrap">
+                            <i class="fas fa-expand mr-1"></i>Escanear
+                        </button>
                     </div>
+                    <p class="mt-1 text-xs" :class="barcodeStatus.cls" x-text="barcodeStatus.text"></p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Precio de venta (USD) *</label>
+                        <input x-ref="priceInput" type="number" step="0.01" min="0" inputmode="decimal" x-model="productModal.form.price"
+                            placeholder="0.00"
+                            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                        <select x-model="productModal.form.category_id"
+                            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-sky-500">
+                            <option value="">Sin categoría</option>
+                            <template x-for="c in activeCategories" :key="c.id">
+                                <option :value="c.id" x-text="c.name"></option>
+                            </template>
+                        </select>
+                        <button type="button" @click="openCategoriesModal()" class="text-xs text-sky-600 hover:underline mt-1">Gestionar categorías</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div x-show="!productModal.form.id">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Stock inicial</label>
+                        <input type="number" step="1" min="0" inputmode="numeric" x-model="productModal.form.initial_stock"
+                            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500">
+                        <p class="text-xs text-gray-500 mt-1">Unidades que tienes hoy.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Avisar cuando queden</label>
+                        <input type="number" step="1" min="0" inputmode="numeric" x-model="productModal.form.min_stock"
+                            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500">
+                        <p class="text-xs text-gray-500 mt-1">Stock mínimo (0 = sin aviso).</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Descripción <span class="text-gray-400 font-normal">(opcional)</span></label>
+                    <textarea x-model="productModal.form.description" rows="2" maxlength="250"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"></textarea>
+                </div>
+
+                <label x-show="productModal.form.id" class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer">
+                    <input type="checkbox" x-model="productModal.form.is_active" class="mt-1 h-4 w-4 text-sky-600 rounded">
+                    <span>
+                        <span class="block text-sm font-medium text-gray-800">Producto activo</span>
+                        <span class="block text-xs text-gray-500">Si lo desactivas, deja de aparecer en el punto de venta. No se borra su historial.</span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="px-6 py-4 border-t bg-gray-50 sm:rounded-b-2xl flex justify-end gap-3">
+                <button type="button" @click="closeProductModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancelar</button>
+                <button type="submit" :disabled="processing"
+                    class="px-6 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-50 flex items-center gap-2 font-medium">
+                    <i class="fas fa-circle-notch fa-spin" x-show="processing"></i>
+                    <i class="fas fa-check" x-show="!processing"></i>
+                    <span x-text="processing ? 'Guardando...' : 'Guardar'"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ================= Modal: Movimiento de stock ================= -->
+    <div x-show="mv.open" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        @click.self="closeMovement()">
+        <div class="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-800">Mover stock</h3>
+                <button type="button" @click="closeMovement()" aria-label="Cerrar" class="text-gray-400 hover:text-gray-600 p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="font-semibold text-gray-900 truncate" x-text="mv.product ? mv.product.product_name : ''"></p>
+                        <p class="text-xs text-gray-500 font-mono" x-text="mv.product && mv.product.barcode ? mv.product.barcode : 'Sin código de barras'"></p>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                        <p class="text-xs text-gray-500">Stock actual</p>
+                        <p class="text-2xl font-bold text-gray-900 tabular-nums" x-text="mv.product ? mv.product.stock : 0"></p>
+                    </div>
+                </div>
+
+                <div class="grid gap-1 p-1 bg-gray-100 rounded-xl" :class="canManage ? 'grid-cols-3' : 'grid-cols-2'">
+                    <button type="button" @click="setMvType('entrada')"
+                        :class="mv.type === 'entrada' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'"
+                        class="py-2 rounded-lg text-sm font-semibold"><i class="fas fa-plus mr-1"></i>Entrada</button>
+                    <button type="button" @click="setMvType('salida')"
+                        :class="mv.type === 'salida' ? 'bg-white text-rose-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'"
+                        class="py-2 rounded-lg text-sm font-semibold"><i class="fas fa-minus mr-1"></i>Salida</button>
+                    <button type="button" x-show="canManage" @click="setMvType('ajuste')"
+                        :class="mv.type === 'ajuste' ? 'bg-white text-violet-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'"
+                        class="py-2 rounded-lg text-sm font-semibold"><i class="fas fa-clipboard-check mr-1"></i>Conteo</button>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                        x-text="mv.type === 'ajuste' ? 'Conteo real (unidades que hay físicamente)' : 'Cantidad'"></label>
+                    <div class="flex items-stretch gap-2">
+                        <button type="button" @click="stepQty(-1)" aria-label="Restar"
+                            class="w-12 rounded-lg border border-gray-300 text-xl text-gray-700 hover:bg-gray-50">−</button>
+                        <input x-ref="mvQty" type="number" step="1" min="0" inputmode="numeric" x-model="mv.qty"
+                            @keydown.enter.prevent="submitMovement()"
+                            class="flex-1 min-w-0 text-center text-2xl font-bold py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 tabular-nums">
+                        <button type="button" @click="stepQty(1)" aria-label="Sumar"
+                            class="w-12 rounded-lg border border-gray-300 text-xl text-gray-700 hover:bg-gray-50">+</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
+                        <select x-model="mv.reason"
+                            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-sky-500">
+                            <template x-for="r in mvReasons" :key="r">
+                                <option :value="r" x-text="r"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nota <span class="text-gray-400 font-normal">(opcional)</span></label>
+                        <input type="text" x-model="mv.notes" maxlength="120" autocomplete="off" placeholder="Ej: factura 0123"
+                            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500">
+                    </div>
+                </div>
+
+                <div class="rounded-xl p-3 flex items-center justify-between"
+                    :class="mvError ? 'bg-red-50' : 'bg-sky-50'">
+                    <span class="text-sm font-medium" :class="mvError ? 'text-red-700' : 'text-sky-800'"
+                        x-text="mvError ? mvError : 'Stock después del movimiento'"></span>
+                    <span x-show="!mvError" class="text-xl font-bold text-sky-700 tabular-nums"
+                        x-text="(mv.product ? mv.product.stock : 0) + ' → ' + mvNewStock"></span>
                 </div>
             </div>
 
-            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex justify-end space-x-3 sticky bottom-0">
-                <button @click="closeManageInventoryModal()" class="px-4 py-2 text-gray-600 touch-btn">Cancelar</button>
-                <button @click="updateInventory()" :disabled="processing"
-                    class="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 touch-btn flex items-center space-x-2">
+            <div class="px-6 py-4 border-t bg-gray-50 sm:rounded-b-2xl flex justify-end gap-3">
+                <button type="button" @click="closeMovement()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancelar</button>
+                <button type="button" @click="submitMovement()" :disabled="processing || !!mvError"
+                    class="px-6 py-2 text-white rounded-lg disabled:opacity-50 flex items-center gap-2 font-medium"
+                    :class="mv.type === 'salida' ? 'bg-rose-500 hover:bg-rose-600' : (mv.type === 'ajuste' ? 'bg-violet-500 hover:bg-violet-600' : 'bg-emerald-500 hover:bg-emerald-600')">
                     <i class="fas fa-circle-notch fa-spin" x-show="processing"></i>
-                    <i class="fas fa-save" x-show="!processing"></i>
-                    <span x-text="processing ? 'Procesando...' : 'Actualizar'"></span>
+                    <i class="fas fa-check" x-show="!processing"></i>
+                    <span x-text="processing ? 'Guardando...' : (mv.type === 'entrada' ? 'Agregar stock' : (mv.type === 'salida' ? 'Descontar stock' : 'Ajustar stock'))"></span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Recargar Tanque -->
-    <div x-show="showRefillTankModal" x-cloak
-        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-        @click.self="closeRefillTankModal()">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-bounce-in"
-            @click.stop>
-            <div class="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
-                <h3 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-plus-circle text-blue-600 mr-2"></i>Recargar Tanque
-                </h3>
-                <button @click="closeRefillTankModal()" class="text-gray-400 hover:text-gray-600 touch-btn p-2">
+    <!-- ================= Modal: Historial de un producto ================= -->
+    <div x-show="history.open" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        @click.self="history.open = false">
+        <div class="bg-white w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center">
+                <div class="min-w-0">
+                    <h3 class="text-lg font-bold text-gray-800">Historial</h3>
+                    <p class="text-sm text-gray-500 truncate" x-text="history.product ? history.product.product_name : ''"></p>
+                </div>
+                <button type="button" @click="history.open = false" aria-label="Cerrar" class="text-gray-400 hover:text-gray-600 p-2">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
-
-            <div class="p-6 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Tanque *</label>
-                    <select x-model="refillForm.tankId"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500">
-                        <option value="">Seleccionar tanque...</option>
-                        <template x-for="tank in tanks" :key="tank.id">
-                            <option :value="tank.id"
-                                x-text="tank.name + ' (' + tank.current_liters + 'L / ' + tank.capacity_liters + 'L)'">
-                            </option>
-                        </template>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Litros a Agregar *</label>
-                    <input type="number" x-model.number="refillForm.liters" step="1" min="1"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-                        placeholder="Ej: 3500">
-                    <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Se sumará al nivel actual del tanque
-                    </p>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Notas</label>
-                    <textarea x-model="refillForm.notes" rows="2"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-                        placeholder="Ej: Compra de agua - Factura #1234"></textarea>
-                </div>
-
-                <div class="bg-blue-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-blue-900 mb-2">Resumen</h4>
-                    <div class="space-y-1 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">Nivel actual:</span>
-                            <span class="font-semibold"
-                                x-text="(getCurrentTankLevel() || 0).toLocaleString() + 'L'"></span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">A agregar:</span>
-                            <span class="font-semibold text-blue-600"
-                                x-text="(refillForm.liters || 0).toLocaleString() + 'L'"></span>
-                        </div>
-                        <div class="flex justify-between pt-2 border-t border-blue-200">
-                            <span class="text-gray-800 font-semibold">Nuevo nivel:</span>
-                            <span class="font-bold text-green-600"
-                                x-text="(getCurrentTankLevel() + (refillForm.liters || 0)).toLocaleString() + 'L'"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex justify-end space-x-3 sticky bottom-0">
-                <button @click="closeRefillTankModal()" class="px-4 py-2 text-gray-600 touch-btn">Cancelar</button>
-                <button @click="refillTank()" :disabled="processing"
-                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 touch-btn flex items-center space-x-2">
-                    <i class="fas fa-circle-notch fa-spin" x-show="processing"></i>
-                    <i class="fas fa-save" x-show="!processing"></i>
-                    <span x-text="processing ? 'Procesando...' : 'Recargar'"></span>
-                </button>
+            <div class="overflow-y-auto">
+                <div x-show="history.loading" class="text-center py-10"><i class="fas fa-circle-notch fa-spin text-2xl text-sky-500"></i></div>
+                <p x-show="!history.loading && history.rows.length === 0" class="text-center py-10 text-gray-500">Este producto todavía no tiene movimientos.</p>
+                <ul class="divide-y divide-gray-100">
+                    <template x-for="m in history.rows" :key="m.id">
+                        <li class="px-6 py-3 flex items-center justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold" :class="typeClass(m.movement_type)" x-text="typeLabel(m.movement_type)"></span>
+                                    <span class="text-sm text-gray-700 truncate" x-text="m.reason || ''"></span>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">
+                                    <span x-text="fmtDateTime(m.created_at)"></span> · <span x-text="m.user_name"></span>
+                                    <span x-show="m.notes" x-text="' · ' + m.notes"></span>
+                                </p>
+                            </div>
+                            <div class="text-right flex-shrink-0">
+                                <p class="font-bold tabular-nums" :class="m.quantity > 0 ? 'text-emerald-600' : 'text-rose-600'" x-text="(m.quantity > 0 ? '+' : '') + m.quantity"></p>
+                                <p class="text-xs text-gray-400 tabular-nums" x-text="m.stock_before + ' → ' + m.stock_after"></p>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
             </div>
         </div>
     </div>
 
-    <!-- Modal Llenar Botellones -->
-    <div x-show="showFillBottlesModal" x-cloak
-        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-        @click.self="closeFillBottlesModal()">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-bounce-in"
-            @click.stop>
-            <div class="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
-                <h3 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-tint text-cyan-600 mr-2"></i>Llenar Botellones
-                </h3>
-                <button @click="closeFillBottlesModal()" class="text-gray-400 hover:text-gray-600 touch-btn p-2">
+    <!-- ================= Modal: Categorías ================= -->
+    <div x-show="catModal.open" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[60] sm:p-4"
+        @click.self="catModal.open = false">
+        <div class="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-800">Categorías</h3>
+                <button type="button" @click="catModal.open = false" aria-label="Cerrar" class="text-gray-400 hover:text-gray-600 p-2">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
-
-            <div class="p-6 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Botellón *</label>
-                    <select x-model="fillForm.sizeLiters"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500">
-                        <option value="">Seleccionar...</option>
-                        <option value="5">Botellón 5 Litros</option>
-                        <option value="13">Botellón 13 Litros</option>
-                        <option value="20">Botellón 20 Litros</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad de Botellones *</label>
-                    <input type="number" x-model.number="fillForm.quantity" step="1" min="1"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-                        placeholder="Ej: 50">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Tanque de Origen *</label>
-                    <select x-model="fillForm.tankId"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500">
-                        <option value="">Seleccionar tanque...</option>
-                        <template x-for="tank in tanks" :key="tank.id">
-                            <option :value="tank.id" x-text="tank.name + ' (' + tank.current_liters + 'L disponibles)'">
-                            </option>
-                        </template>
-                    </select>
-                </div>
-
-                <div class="bg-cyan-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-cyan-900 mb-2">Resumen</h4>
-                    <div class="space-y-1 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">Botellones:</span>
-                            <span class="font-semibold" x-text="(fillForm.quantity || 0) + ' unidades'"></span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">Tamaño:</span>
-                            <span class="font-semibold" x-text="getFillFormSizeName()"></span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">Agua requerida:</span>
-                            <span class="font-semibold text-cyan-600"
-                                x-text="((fillForm.quantity || 0) * (fillForm.sizeLiters || 0)).toLocaleString() + 'L'"></span>
-                        </div>
-                    </div>
-                </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <form @submit.prevent="addCategory()" class="flex gap-2">
+                    <input type="text" x-model="catModal.newName" maxlength="60" autocomplete="off" placeholder="Nueva categoría (ej: Baterías)"
+                        class="flex-1 min-w-0 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500">
+                    <button type="submit" class="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 font-medium">Agregar</button>
+                </form>
+                <p x-show="categories.length === 0" class="text-sm text-gray-500 text-center py-4">Todavía no hay categorías.</p>
+                <ul class="divide-y divide-gray-100 border rounded-lg" x-show="categories.length > 0">
+                    <template x-for="c in categories" :key="c.id">
+                        <li class="px-3 py-2.5 flex items-center gap-2">
+                            <template x-if="catModal.editingId === c.id">
+                                <form @submit.prevent="saveCategoryName(c)" class="flex-1 flex gap-2">
+                                    <input type="text" x-model="catModal.editName" maxlength="60" autocomplete="off"
+                                        class="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                                    <button type="submit" class="px-3 py-1.5 bg-sky-500 text-white rounded-lg text-sm">Guardar</button>
+                                    <button type="button" @click="catModal.editingId = null" class="px-2 text-gray-500 text-sm">Cancelar</button>
+                                </form>
+                            </template>
+                            <template x-if="catModal.editingId !== c.id">
+                                <div class="flex-1 flex items-center justify-between gap-2 min-w-0">
+                                    <span class="truncate" :class="c.is_active ? 'text-gray-800' : 'text-gray-400 line-through'" x-text="c.name"></span>
+                                    <div class="flex items-center gap-1 flex-shrink-0">
+                                        <button type="button" @click="startEditCategory(c)" class="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Renombrar</button>
+                                        <button type="button" @click="toggleCategory(c)" class="px-2 py-1 text-xs rounded"
+                                            :class="c.is_active ? 'text-amber-700 hover:bg-amber-50' : 'text-emerald-700 hover:bg-emerald-50'"
+                                            x-text="c.is_active ? 'Ocultar' : 'Mostrar'"></button>
+                                    </div>
+                                </div>
+                            </template>
+                        </li>
+                    </template>
+                </ul>
+                <p class="text-xs text-gray-500">Ocultar una categoría la quita de los filtros y del formulario; los productos conservan su categoría.</p>
             </div>
+        </div>
+    </div>
 
-            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex justify-end space-x-3 sticky bottom-0">
-                <button @click="closeFillBottlesModal()" class="px-4 py-2 text-gray-600 touch-btn">Cancelar</button>
-                <button @click="fillBottles()" :disabled="processing"
-                    class="px-6 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 disabled:opacity-50 touch-btn flex items-center space-x-2">
-                    <i class="fas fa-circle-notch fa-spin" x-show="processing"></i>
-                    <i class="fas fa-save" x-show="!processing"></i>
-                    <span x-text="processing ? 'Procesando...' : 'Llenar'"></span>
+    <!-- ================= Modal: Código no registrado ================= -->
+    <div x-show="unknownModal.open" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="unknownModal.open = false">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center" @click.stop>
+            <div class="w-14 h-14 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-3">
+                <i class="fas fa-barcode text-2xl"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-800">Código no registrado</h3>
+            <p class="mt-1 font-mono text-sm bg-gray-100 rounded px-2 py-1 inline-block" x-text="unknownModal.code"></p>
+            <p class="text-sm text-gray-500 mt-3" x-show="canManage">Ningún producto tiene este código. ¿Qué quieres hacer?</p>
+            <p class="text-sm text-gray-500 mt-3" x-show="!canManage">Ningún producto tiene este código. Pide a un administrador que lo registre.</p>
+            <div class="mt-5 space-y-2" x-show="canManage">
+                <button @click="createFromUnknown()" class="w-full py-2.5 bg-sky-500 text-white rounded-lg hover:bg-sky-600 font-medium">
+                    <i class="fas fa-plus mr-2"></i>Crear producto nuevo
+                </button>
+                <button @click="openAssignModal()" class="w-full py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
+                    <i class="fas fa-link mr-2"></i>Asignar a un producto existente
                 </button>
             </div>
+            <button @click="unknownModal.open = false" class="mt-3 text-sm text-gray-500 hover:text-gray-700">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- ================= Modal: Asignar código a producto existente ================= -->
+    <div x-show="assignModal.open" x-cloak
+        class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        @click.self="assignModal.open = false">
+        <div class="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" @click.stop>
+            <div class="px-6 py-4 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800">Asignar código</h3>
+                    <p class="text-sm text-gray-500">Código: <span class="font-mono" x-text="assignModal.code"></span></p>
+                </div>
+                <button type="button" @click="assignModal.open = false" aria-label="Cerrar" class="text-gray-400 hover:text-gray-600 p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4 border-b">
+                <input x-ref="assignSearch" type="text" x-model="assignModal.search" autocomplete="off" placeholder="Buscar el producto por nombre..."
+                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500">
+            </div>
+            <ul class="overflow-y-auto divide-y divide-gray-100">
+                <template x-for="p in assignCandidates" :key="p.product_id">
+                    <li>
+                        <button type="button" @click="confirmAssign(p)" class="w-full text-left px-6 py-3 hover:bg-gray-50 flex items-center justify-between gap-3">
+                            <span class="min-w-0">
+                                <span class="block font-medium text-gray-900 truncate" x-text="p.product_name"></span>
+                                <span class="block text-xs text-gray-500" x-text="p.category_name || 'Sin categoría'"></span>
+                            </span>
+                            <span class="text-xs flex-shrink-0" :class="p.barcode ? 'text-amber-600' : 'text-emerald-600'"
+                                x-text="p.barcode ? 'Ya tiene código' : 'Sin código'"></span>
+                        </button>
+                    </li>
+                </template>
+                <li x-show="assignCandidates.length === 0" class="px-6 py-8 text-center text-sm text-gray-500">No hay productos que coincidan.</li>
+            </ul>
         </div>
     </div>
 
@@ -697,6 +928,23 @@
         const SUPABASE_URL = 'https://xasdwtlspuexreyqtifp.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhhc2R3dGxzcHVleHJleXF0aWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyODQ2MDksImV4cCI6MjExMDg2MDYwOX0.BYffuy97T_-Ri_ckBmtodUtPCehhFpF4IJoE6DaXSyM';
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Sucursal usada si el perfil no tiene una asignada (p. ej. un admin sin sucursal)
+        const DEFAULT_BRANCH = 'Autoplanet';
+
+        const MOVEMENT_REASONS = {
+            entrada: ['Compra a proveedor', 'Devolución de cliente', 'Otro'],
+            salida: ['Producto dañado', 'Pérdida o robo', 'Uso interno', 'Devolución a proveedor', 'Otro'],
+            ajuste: ['Conteo físico']
+        };
+
+        const MOVEMENT_TYPES = {
+            inicial: { label: 'Stock inicial', cls: 'bg-gray-100 text-gray-700' },
+            entrada: { label: 'Entrada', cls: 'bg-emerald-100 text-emerald-700' },
+            salida: { label: 'Salida', cls: 'bg-rose-100 text-rose-700' },
+            venta: { label: 'Venta', cls: 'bg-sky-100 text-sky-700' },
+            ajuste: { label: 'Ajuste', cls: 'bg-violet-100 text-violet-700' }
+        };
 
         async function logout() {
             await supabase.auth.signOut();
@@ -714,7 +962,7 @@
             const icons = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
             Toastify({
                 text: `${icons[type]} ${message}`,
-                duration: 3000, close: true, gravity: 'top', position: 'right', stopOnFocus: true,
+                duration: 3500, close: true, gravity: 'top', position: 'right', stopOnFocus: true,
                 style: {
                     background: gradients[type], borderRadius: '12px', fontFamily: 'Inter, sans-serif',
                     fontWeight: '500', fontSize: '14px', padding: '14px 20px',
@@ -737,170 +985,88 @@
             return result.isConfirmed;
         }
 
-        function round2(num) {
-            if (num === null || num === undefined || isNaN(num)) return 0;
-            return Math.floor(parseFloat(num) * 100) / 100;
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function emptyProductForm() {
+            return { id: null, name: '', barcode: '', category_id: '', description: '', price: '', min_stock: 5, initial_stock: 0, is_active: true };
         }
 
         function inventarioApp() {
             return {
+                // ----- sesión / layout -----
                 mobileMenuOpen: false,
-                currentPage: 'inventario',
                 loading: true,
                 processing: false,
-                virtualInventory: [],
-                tanks: [],
-                totalWater: 0,
                 userName: '',
                 userRole: '',
                 userBranch: '',
                 userInitials: '??',
+                branch: '',
 
-                selectedBranch: 'all',
-                availableBranches: [],
+                // ----- datos -----
+                products: [],
+                categories: [],
+                movements: [],
+                movementsLoaded: false,
+                movementsLoading: false,
+                userNames: {},
 
-                showManageInventoryModal: false,
-                showRefillTankModal: false,
-                showFillBottlesModal: false,
-                manageForm: { productId: '', quantity: 0 },
-                refillForm: { tankId: '', liters: 0, notes: '' },
-                fillForm: { sizeLiters: '', quantity: 0, tankId: '' },
-                selectedProduct: null,
+                // ----- filtros -----
+                tab: 'productos',
+                search: '',
+                categoryFilter: 'all',
+                statusFilter: 'all',
+                sortBy: 'name',
+                visibleCount: 60,
+                movementFilter: 'all',
 
+                // ----- modales -----
+                productModal: { open: false, form: emptyProductForm() },
+                mv: { open: false, product: null, type: 'entrada', qty: 1, reason: '', notes: '' },
+                history: { open: false, product: null, rows: [], loading: false },
+                catModal: { open: false, newName: '', editingId: null, editName: '' },
+                unknownModal: { open: false, code: '' },
+                assignModal: { open: false, code: '', search: '' },
+
+                // =====================================================
+                // Arranque
+                // =====================================================
                 async initInventario() {
                     const { data: { session } } = await supabase.auth.getSession();
                     if (!session) { window.location.href = 'login.html'; return; }
+
+                    supabase.auth.onAuthStateChange((event) => {
+                        if (event === 'SIGNED_OUT') window.location.href = 'login.html';
+                    });
 
                     try {
                         const { data: profile } = await supabase.from('profiles').select('full_name, role, branch').eq('id', session.user.id).single();
                         if (profile) {
                             this.userName = profile.full_name;
                             this.userRole = profile.role;
-                            this.userBranch = profile.branch;
                             this.userInitials = this.getInitials(profile.full_name);
-                            this.selectedBranch = (profile.role === 'admin') ? 'all' : profile.branch;
+                            this.branch = profile.branch ? String(profile.branch) : '';
                         }
-
-                        if (this.userRole === 'admin') {
-                            await this.loadAvailableBranches();
+                        if (!this.branch) {
+                            const { data: priceRows } = await supabase.from('product_prices').select('branch').limit(1);
+                            this.branch = (priceRows && priceRows[0] && priceRows[0].branch) || DEFAULT_BRANCH;
                         }
+                        this.userBranch = this.branch;
 
-                        await this.loadVirtualInventory();
-                        await this.loadTanks();
+                        this.$watch('search', () => { this.visibleCount = 60; });
+                        this.$watch('categoryFilter', () => { this.visibleCount = 60; });
+                        this.$watch('statusFilter', () => { this.visibleCount = 60; });
+                        this.$watch('sortBy', () => { this.visibleCount = 60; });
+
+                        this.setupScanner();
+                        this.setupKeys();
+                        await Promise.all([this.loadCategories(), this.loadProducts()]);
                     } catch (err) {
-                        console.error('Error inicializando:', err);
+                        this.handleError(err, 'Error al iniciar');
                     } finally {
                         this.loading = false;
-                    }
-                },
-
-                async loadAvailableBranches() {
-                    try {
-                        const { data, error } = await supabase.from('profiles').select('branch').not('branch', 'is', null);
-                        if (!error && data) {
-                            this.availableBranches = [...new Set(data.map(p => p.branch))];
-                        }
-                    } catch (err) {
-                        console.error('Error cargando sucursales:', err);
-                    }
-                },
-
-                async refreshInventory() {
-                    this.loading = true;
-                    await Promise.all([this.loadVirtualInventory(), this.loadTanks()]);
-                    this.loading = false;
-                },
-
-                async loadVirtualInventory() {
-                    try {
-                        console.log('🔍 ========== INICIO CARGA INVENTARIO ==========');
-                        console.log('📍 Sucursal seleccionada:', this.selectedBranch);
-
-                        let inventoryQuery = supabase.from('inventory')
-                            .select(`
-                                id,
-                                product_id,
-                                quantity,
-                                min_stock,
-                                branch,
-                                products!inner (
-                                    id,
-                                    name,
-                                    size_liters,
-                                    product_type,
-                                    description
-                                )
-                            `);
-
-                        if (this.selectedBranch !== 'all') {
-                            inventoryQuery = inventoryQuery.eq('branch', this.selectedBranch);
-                        }
-
-                        const { data: inventoryData, error: inventoryError } = await inventoryQuery;
-
-                        if (inventoryError) {
-                            console.error('❌ Error consultando inventory:', inventoryError);
-                            throw inventoryError;
-                        }
-
-                        let pricesQuery = supabase.from('product_prices')
-                            .select(`id, product_id, price_usd, branch, is_active`);
-
-                        if (this.selectedBranch !== 'all') {
-                            pricesQuery = pricesQuery.eq('branch', this.selectedBranch);
-                        }
-
-                        const { data: pricesData, error: pricesError } = await pricesQuery.eq('is_active', true);
-
-                        const priceMap = {};
-                        (pricesData || []).forEach(price => {
-                            const key = `${price.product_id}_${price.branch}`;
-                            priceMap[key] = price.price_usd;
-                        });
-
-                        const combinedData = inventoryData.map(item => {
-                            const priceKey = `${item.product_id}_${item.branch}`;
-                            const price = priceMap[priceKey] || 0;
-                            const isCap = item.products.product_type === 'cap';
-                            const isEmptyBottle = item.products.product_type === 'empty_bottle';
-
-                            return {
-                                product_id: item.product_id,
-                                product_name: item.products.name,
-                                size_liters: isCap ? null : item.products.size_liters,
-                                product_type: item.products.product_type,
-                                price: price,
-                                virtual_stock: item.quantity,
-                                total_value: round2(item.quantity * price),
-                                water_assigned: (isCap || isEmptyBottle) ? 0 : (item.quantity * (item.products.size_liters || 0))
-                            };
-                        });
-
-                        this.virtualInventory = combinedData;
-
-                    } catch (err) {
-                        console.error('❌ Error cargando inventario virtual:', err);
-                        showToast('Error al cargar inventario: ' + err.message, 'error');
-                        this.virtualInventory = [];
-                    }
-                },
-
-                async loadTanks() {
-                    try {
-                        let query = supabase.from('tanks').select('*').order('name');
-
-                        if (this.selectedBranch !== 'all') {
-                            query = query.eq('branch', this.selectedBranch);
-                        }
-
-                        const { data, error } = await query;
-                        if (error) throw error;
-
-                        this.tanks = data || [];
-                        this.totalWater = this.tanks.reduce((sum, tank) => sum + tank.current_liters, 0);
-                    } catch (err) {
-                        console.error('Error cargando tanques:', err);
-                        showToast('Error al cargar tanques', 'error');
                     }
                 },
 
@@ -909,195 +1075,618 @@
                     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 },
 
-                formatDate(dateString) { return DateUtils.formatDate(dateString); },
-                formatDateTime(dateString) { return DateUtils.formatDateTime(dateString); },
-                formatDateLong(dateString) { return DateUtils.formatDateLong(dateString); },
-
-                openManageInventoryModal() {
-                    this.manageForm = { productId: '', quantity: 0 };
-                    this.selectedProduct = null;
-                    this.showManageInventoryModal = true;
-                },
-                closeManageInventoryModal() { this.showManageInventoryModal = false; },
-
-                loadProductData() {
-                    this.selectedProduct = this.virtualInventory.find(item => item.product_id === this.manageForm.productId) || null;
-                },
-
-                async updateInventory() {
-                    if (!this.manageForm.productId) { showToast('Seleccione un producto', 'warning'); return; }
-                    if (!this.manageForm.quantity || this.manageForm.quantity <= 0) { showToast('Ingrese una cantidad válida', 'warning'); return; }
-
-                    const product = this.selectedProduct;
-                    const newStock = (product?.virtual_stock || 0) + this.manageForm.quantity;
-
-                    const confirmed = await showConfirm('Confirmar Actualización', `
-                        <div class="text-left space-y-2">
-                            <p><strong>Producto:</strong> ${product?.product_name}</p>
-                            <p><strong>Stock actual:</strong> ${product?.virtual_stock || 0}</p>
-                            <p><strong>A agregar:</strong> ${this.manageForm.quantity}</p>
-                            <div class="bg-green-50 p-3 rounded-lg mt-2">
-                                <p class="font-bold text-green-600">Nuevo stock: ${newStock}</p>
-                            </div>
-                        </div>`, 'Confirmar', 'Cancelar');
-
-                    if (!confirmed) return;
-
-                    this.processing = true;
-                    try {
-                        const { data: { session } } = await supabase.auth.getSession();
-
-                        // Actualizar inventario
-                        const { error: updateError } = await supabase.from('inventory')
-                            .update({
-                                quantity: newStock,
-                                updated_at: new Date().toISOString()
-                            })
-                            .eq('product_id', this.manageForm.productId)
-                            .eq('branch', this.selectedBranch === 'all' ? this.userBranch : this.selectedBranch);
-
-                        if (updateError) throw updateError;
-
-                        showToast(`Inventario actualizado: ${newStock} unidades`, 'success');
-                        this.closeManageInventoryModal();
-                        await this.refreshInventory();
-                    } catch (err) {
-                        console.error('Error actualizando inventario:', err);
-                        showToast('Error al actualizar inventario: ' + err.message, 'error');
-                    } finally {
-                        this.processing = false;
-                    }
-                },
-
-                openRefillTankModal() {
-                    this.refillForm = { tankId: '', liters: 0, notes: '' };
-                    this.showRefillTankModal = true;
-                },
-                closeRefillTankModal() { this.showRefillTankModal = false; },
-                getCurrentTankLevel() {
-                    const tank = this.tanks.find(t => t.id === this.refillForm.tankId);
-                    return tank ? tank.current_liters : 0;
-                },
-
-                async refillTank() {
-                    if (!this.refillForm.tankId) { showToast('Seleccione un tanque', 'warning'); return; }
-                    if (!this.refillForm.liters || this.refillForm.liters <= 0) { showToast('Ingrese una cantidad válida de litros', 'warning'); return; }
-
-                    const tank = this.tanks.find(t => t.id === this.refillForm.tankId);
-                    const newLevel = tank.current_liters + this.refillForm.liters;
-
-                    if (newLevel > tank.capacity_liters) {
-                        showToast(`Excede la capacidad del tanque (${tank.capacity_liters}L)`, 'error');
+                handleError(err, prefix = 'Error') {
+                    console.error(prefix, err);
+                    const msg = (err && err.message) ? err.message : String(err);
+                    if (/jwt expired|invalid jwt|not authenticated/i.test(msg)) {
+                        showToast('Tu sesión expiró. Inicia sesión de nuevo.', 'warning');
+                        setTimeout(() => { window.location.href = 'login.html'; }, 1500);
                         return;
                     }
+                    showToast(`${prefix}: ${msg}`, 'error');
+                },
 
-                    const confirmed = await showConfirm('Confirmar Recarga', `
-                        <div class="text-left space-y-2">
-                            <p><strong>Tanque:</strong> ${tank.name}</p>
-                            <p><strong>Nivel actual:</strong> ${tank.current_liters.toLocaleString()}L</p>
-                            <p><strong>A agregar:</strong> ${this.refillForm.liters.toLocaleString()}L</p>
-                            <div class="bg-green-50 p-3 rounded-lg mt-2">
-                                <p class="font-bold text-green-600">Nuevo nivel: ${newLevel.toLocaleString()}L</p>
-                            </div>
-                        </div>`, 'Confirmar Recarga', 'Cancelar');
+                fmtDateTime(value) {
+                    if (!value) return '';
+                    try { return DateUtils.formatDateTime(value); } catch (e) { /* respaldo abajo */ }
+                    try { return new Date(value).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return String(value); }
+                },
 
-                    if (!confirmed) return;
+                // =====================================================
+                // Carga de datos
+                // =====================================================
+                async loadProducts() {
+                    const { data, error } = await supabase.rpc('get_inventory', { branch_param: this.branch });
+                    if (error) throw error;
+                    this.products = (data || []).map(r => ({
+                        product_id: r.product_id,
+                        product_name: r.product_name,
+                        barcode: r.barcode || '',
+                        description: r.description || '',
+                        category_id: r.category_id || null,
+                        category_name: r.category_name || '',
+                        price: (r.price === null || r.price === undefined) ? null : Number(r.price),
+                        stock: parseInt(r.stock) || 0,
+                        min_stock: parseInt(r.min_stock) || 0,
+                        is_active: r.is_active !== false,
+                        updated_at: r.updated_at
+                    }));
+                },
+
+                async refresh() {
+                    try {
+                        await this.loadProducts();
+                        if (this.movementsLoaded) await this.loadMovements();
+                    } catch (err) {
+                        this.handleError(err, 'No se pudo actualizar el inventario');
+                    }
+                },
+
+                async loadCategories() {
+                    const { data, error } = await supabase.from('product_categories').select('id, name, is_active').order('name');
+                    if (error) throw error;
+                    this.categories = data || [];
+                },
+
+                async attachUserNames(rows) {
+                    const missing = [...new Set((rows || []).map(r => r.created_by).filter(id => id && !this.userNames[id]))];
+                    if (missing.length) {
+                        const { data } = await supabase.from('profiles').select('id, full_name').in('id', missing);
+                        (data || []).forEach(p => { this.userNames[p.id] = p.full_name; });
+                    }
+                    (rows || []).forEach(r => { r.user_name = this.userNames[r.created_by] || '—'; });
+                    return rows;
+                },
+
+                async loadMovements() {
+                    this.movementsLoading = true;
+                    try {
+                        const { data, error } = await supabase.from('inventory_movements')
+                            .select('id, product_id, movement_type, quantity, stock_before, stock_after, reason, notes, created_at, created_by')
+                            .eq('branch', this.branch)
+                            .order('created_at', { ascending: false })
+                            .limit(200);
+                        if (error) throw error;
+                        this.movements = await this.attachUserNames(data || []);
+                        this.movementsLoaded = true;
+                    } catch (err) {
+                        this.handleError(err, 'No se pudo cargar el historial');
+                    } finally {
+                        this.movementsLoading = false;
+                    }
+                },
+
+                openMovementsTab() {
+                    this.tab = 'movimientos';
+                    if (!this.movementsLoaded) this.loadMovements();
+                },
+
+                // =====================================================
+                // Datos derivados
+                // =====================================================
+                get canManage() { return this.userRole === 'admin' || this.userRole === 'supervisor'; },
+
+                get activeProducts() { return this.products.filter(p => p.is_active); },
+
+                get activeCategories() { return this.categories.filter(c => c.is_active); },
+
+                stockState(p) {
+                    if (p.stock <= 0) return 'out';
+                    if (p.min_stock > 0 && p.stock <= p.min_stock) return 'low';
+                    return 'ok';
+                },
+
+                stockBadge(p) {
+                    const s = this.stockState(p);
+                    if (s === 'out') return 'bg-red-100 text-red-700';
+                    if (s === 'low') return 'bg-amber-100 text-amber-700';
+                    return 'bg-emerald-100 text-emerald-700';
+                },
+
+                priceLabel(p) { return (p.price === null || p.price === undefined) ? 'Sin precio' : '$' + p.price.toFixed(2); },
+
+                get kpis() {
+                    const act = this.activeProducts;
+                    return {
+                        products: act.length,
+                        units: act.reduce((s, p) => s + p.stock, 0),
+                        low: act.filter(p => this.stockState(p) === 'low').length,
+                        out: act.filter(p => this.stockState(p) === 'out').length
+                    };
+                },
+
+                get categoryCounts() {
+                    const c = { all: 0, none: 0 };
+                    this.activeProducts.forEach(p => {
+                        c.all++;
+                        if (p.category_id) c[p.category_id] = (c[p.category_id] || 0) + 1; else c.none++;
+                    });
+                    return c;
+                },
+
+                get subtitle() {
+                    let date = '';
+                    try { date = DateUtils.formatDateLong(new Date()); } catch (e) { date = new Date().toLocaleDateString('es-VE'); }
+                    return `${this.kpis.products} productos activos · ${this.branch} · ${date}`;
+                },
+
+                get filteredProducts() {
+                    const q = this.search.trim().toLowerCase();
+                    let list = this.products.filter(p => this.statusFilter === 'inactive' ? !p.is_active : p.is_active);
+
+                    if (this.categoryFilter === 'none') list = list.filter(p => !p.category_id);
+                    else if (this.categoryFilter !== 'all') list = list.filter(p => p.category_id === this.categoryFilter);
+
+                    if (this.statusFilter === 'low') list = list.filter(p => this.stockState(p) === 'low');
+                    else if (this.statusFilter === 'out') list = list.filter(p => this.stockState(p) === 'out');
+                    else if (this.statusFilter === 'nobarcode') list = list.filter(p => !p.barcode);
+                    else if (this.statusFilter === 'noprice') list = list.filter(p => p.price === null);
+
+                    if (q) {
+                        list = list.filter(p =>
+                            p.product_name.toLowerCase().includes(q) ||
+                            (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+                            (p.description && p.description.toLowerCase().includes(q)) ||
+                            (p.category_name && p.category_name.toLowerCase().includes(q))
+                        );
+                    }
+
+                    const sorted = list.slice();
+                    if (this.sortBy === 'stock') sorted.sort((a, b) => a.stock - b.stock || a.product_name.localeCompare(b.product_name, 'es', { sensitivity: 'base' }));
+                    else if (this.sortBy === 'updated') sorted.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+                    else sorted.sort((a, b) => a.product_name.localeCompare(b.product_name, 'es', { sensitivity: 'base' }));
+                    return sorted;
+                },
+
+                get visibleProducts() { return this.filteredProducts.slice(0, this.visibleCount); },
+
+                get hasFilters() { return !!(this.search.trim() || this.categoryFilter !== 'all' || this.statusFilter !== 'all'); },
+
+                clearFilters() { this.search = ''; this.categoryFilter = 'all'; this.statusFilter = 'all'; },
+
+                get filteredMovements() {
+                    const f = this.movementFilter;
+                    if (f === 'all') return this.movements;
+                    if (f === 'entrada') return this.movements.filter(m => m.movement_type === 'entrada' || m.movement_type === 'inicial');
+                    return this.movements.filter(m => m.movement_type === f);
+                },
+
+                productName(id) {
+                    const p = this.products.find(x => x.product_id === id);
+                    return p ? p.product_name : 'Producto eliminado';
+                },
+
+                typeLabel(t) { return (MOVEMENT_TYPES[t] || { label: t }).label; },
+                typeClass(t) { return (MOVEMENT_TYPES[t] || { cls: 'bg-gray-100 text-gray-700' }).cls; },
+
+                findByBarcode(code) {
+                    const c = String(code || '').trim().toLowerCase();
+                    if (!c) return null;
+                    return this.products.find(p => p.barcode && p.barcode.toLowerCase() === c) || null;
+                },
+
+                get anyModalOpen() {
+                    return this.productModal.open || this.mv.open || this.history.open || this.catModal.open ||
+                        this.unknownModal.open || this.assignModal.open;
+                },
+
+                // =====================================================
+                // Lector de código de barras
+                // =====================================================
+                // Un lector "teclea" el código muy rápido y termina con Enter. Si no hay ningún campo
+                // con foco ni ventana abierta, se interpreta como un escaneo.
+                setupScanner() {
+                    let buffer = '';
+                    let lastKeyTime = 0;
+                    const MAX_GAP_MS = 80;
+                    const MIN_LENGTH = 4;
+                    document.addEventListener('keydown', (e) => {
+                        if (e.ctrlKey || e.altKey || e.metaKey) return;
+                        const el = document.activeElement;
+                        const tag = el ? el.tagName : '';
+                        const typingInField = el && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable);
+                        if (typingInField || this.anyModalOpen || document.body.classList.contains('swal2-shown')) {
+                            buffer = '';
+                            return;
+                        }
+                        const now = Date.now();
+                        if (e.key === 'Enter') {
+                            const isScan = buffer.length >= MIN_LENGTH && (now - lastKeyTime) <= MAX_GAP_MS * 2;
+                            const code = buffer;
+                            buffer = '';
+                            if (isScan) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                this.handleScannedCode(code);
+                            }
+                            return;
+                        }
+                        if (!e.key || e.key.length !== 1) return;
+                        if (now - lastKeyTime > MAX_GAP_MS) buffer = '';
+                        buffer += e.key;
+                        lastKeyTime = now;
+                    }, true);
+                },
+
+                setupKeys() {
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key !== 'Escape') return;
+                        if (document.body.classList.contains('swal2-shown')) return;
+                        if (this.assignModal.open) this.assignModal.open = false;
+                        else if (this.unknownModal.open) this.unknownModal.open = false;
+                        else if (this.catModal.open) this.catModal.open = false;
+                        else if (this.history.open) this.history.open = false;
+                        else if (this.mv.open) this.mv.open = false;
+                        else if (this.productModal.open) this.productModal.open = false;
+                    });
+                },
+
+                // Código escaneado en la pantalla principal: si existe abre el movimiento de stock;
+                // si no existe ofrece crear el producto o asignar el código a uno existente.
+                handleScannedCode(code) {
+                    const clean = String(code || '').trim();
+                    if (!clean) return;
+                    this.search = '';
+                    const p = this.findByBarcode(clean);
+                    if (p) {
+                        if (!p.is_active) showToast(`«${p.product_name}» está inactivo`, 'warning');
+                        this.openMovement(p, 'entrada');
+                    } else {
+                        this.unknownModal = { open: true, code: clean };
+                    }
+                },
+
+                onSearchEnter() {
+                    const code = this.search.trim();
+                    if (!code) return;
+                    if (this.findByBarcode(code)) { this.handleScannedCode(code); return; }
+                    const matches = this.filteredProducts;
+                    if (matches.length === 1) {
+                        this.search = '';
+                        this.openMovement(matches[0], 'entrada');
+                    } else if (matches.length === 0 && code.length >= 4 && !/\s/.test(code) && /\d/.test(code)) {
+                        this.search = '';
+                        this.unknownModal = { open: true, code };
+                    }
+                },
+
+                // =====================================================
+                // Producto: crear / editar
+                // =====================================================
+                openProductModal(product = null, focusBarcode = false, prefill = null) {
+                    if (!this.canManage) { showToast('Solo admin o supervisor pueden crear o editar productos', 'warning'); return; }
+                    const form = emptyProductForm();
+                    if (product) {
+                        form.id = product.product_id;
+                        form.name = product.product_name;
+                        form.barcode = product.barcode || '';
+                        form.category_id = product.category_id || '';
+                        form.description = product.description || '';
+                        form.price = product.price === null ? '' : product.price;
+                        form.min_stock = product.min_stock;
+                        form.is_active = product.is_active;
+                    }
+                    if (prefill && prefill.barcode) form.barcode = prefill.barcode;
+                    this.productModal = { open: true, form };
+                    this.$nextTick(() => {
+                        const target = focusBarcode ? this.$refs.barcodeInput : this.$refs.nameInput;
+                        if (target) { target.focus(); if (focusBarcode) target.select(); }
+                    });
+                },
+
+                closeProductModal() { this.productModal.open = false; },
+
+                focusBarcode() {
+                    const el = this.$refs.barcodeInput;
+                    if (el) { el.focus(); el.select(); }
+                },
+
+                // El lector terminó de escribir el código (Enter): se pasa al siguiente campo
+                onBarcodeCaptured() {
+                    this.productModal.form.barcode = String(this.productModal.form.barcode || '').trim();
+                    if (this.$refs.priceInput) this.$refs.priceInput.focus();
+                },
+
+                get barcodeOwner() {
+                    const f = this.productModal.form;
+                    const code = String(f.barcode || '').trim().toLowerCase();
+                    if (!code) return null;
+                    return this.products.find(p => p.barcode && p.barcode.toLowerCase() === code && p.product_id !== f.id) || null;
+                },
+
+                get barcodeStatus() {
+                    const code = String(this.productModal.form.barcode || '').trim();
+                    if (!code) return { cls: 'text-gray-500', text: 'Haz clic en el campo y escanea el producto con el lector.' };
+                    const owner = this.barcodeOwner;
+                    if (owner) return { cls: 'text-red-600', text: `Este código ya pertenece a «${owner.product_name}».` };
+                    return { cls: 'text-emerald-600', text: 'Código listo para guardar.' };
+                },
+
+                async saveProduct() {
+                    if (this.processing) return;
+                    const f = this.productModal.form;
+                    const name = String(f.name || '').trim();
+                    if (!name) { showToast('Escribe el nombre del producto', 'warning'); return; }
+
+                    const price = (f.price === '' || f.price === null) ? NaN : Number(f.price);
+                    if (isNaN(price) || price < 0) { showToast('Ingresa un precio válido', 'warning'); return; }
+
+                    const minStock = parseInt(f.min_stock === '' || f.min_stock === null ? 0 : f.min_stock);
+                    if (isNaN(minStock) || minStock < 0) { showToast('El stock mínimo no es válido', 'warning'); return; }
+
+                    const initial = f.id ? 0 : parseInt(f.initial_stock === '' || f.initial_stock === null ? 0 : f.initial_stock);
+                    if (isNaN(initial) || initial < 0) { showToast('El stock inicial no es válido', 'warning'); return; }
+
+                    if (this.barcodeOwner) { showToast(`Ese código ya pertenece a «${this.barcodeOwner.product_name}»`, 'error'); return; }
 
                     this.processing = true;
                     try {
-                        const { data: { session } } = await supabase.auth.getSession();
-                        const { error: updateError } = await supabase.from('tanks').update({
-                            current_liters: newLevel, updated_at: new Date().toISOString()
-                        }).eq('id', this.refillForm.tankId);
-                        if (updateError) throw updateError;
-
-                        const { error: logError } = await supabase.from('tank_logs').insert({
-                            tank_id: this.refillForm.tankId, change_type: 'refill', liters_changed: this.refillForm.liters,
-                            previous_level: tank.current_liters, new_level: newLevel,
-                            notes: this.refillForm.notes || 'Recarga de tanque', created_by: session.user.id
+                        const { data, error } = await supabase.rpc('save_product', {
+                            p_id: f.id || null,
+                            p_name: name,
+                            p_barcode: String(f.barcode || '').trim() || null,
+                            p_category_id: f.category_id || null,
+                            p_description: String(f.description || '').trim() || null,
+                            p_price: Math.round(price * 100) / 100,
+                            p_branch: this.branch,
+                            p_min_stock: minStock,
+                            p_initial_stock: initial,
+                            p_is_active: f.id ? !!f.is_active : true
                         });
-                        if (logError) console.warn('Error registrando log:', logError);
-
-                        showToast(`Tanque recargado: ${newLevel.toLocaleString()}L`, 'success');
-                        this.closeRefillTankModal();
-                        await this.refreshInventory();
+                        if (error) throw error;
+                        showToast(data && data.created ? 'Producto creado' : 'Cambios guardados', 'success');
+                        this.closeProductModal();
+                        await this.loadProducts();
                     } catch (err) {
-                        console.error('Error recargando tanque:', err);
-                        showToast('Error al recargar tanque: ' + err.message, 'error');
+                        this.handleError(err, 'No se pudo guardar el producto');
                     } finally {
                         this.processing = false;
                     }
                 },
 
-                openFillBottlesModal() {
-                    this.fillForm = { sizeLiters: '', quantity: 0, tankId: '' };
-                    this.showFillBottlesModal = true;
+                // =====================================================
+                // Movimientos de stock (entrada / salida / ajuste)
+                // =====================================================
+                openMovement(p, type = 'entrada') {
+                    this.mv = {
+                        open: true, product: p, type: type,
+                        qty: type === 'ajuste' ? p.stock : 1,
+                        reason: MOVEMENT_REASONS[type][0], notes: ''
+                    };
+                    this.$nextTick(() => {
+                        const el = this.$refs.mvQty;
+                        if (el) { el.focus(); el.select(); }
+                    });
                 },
-                closeFillBottlesModal() { this.showFillBottlesModal = false; },
-                getFillFormSizeName() {
-                    const sizes = { '5': '5 Litros', '13': '13 Litros', '20': '20 Litros' };
-                    return sizes[this.fillForm.sizeLiters] || '';
+
+                closeMovement() { this.mv.open = false; },
+
+                setMvType(t) {
+                    if (t === 'ajuste' && !this.canManage) return;
+                    this.mv.type = t;
+                    this.mv.reason = MOVEMENT_REASONS[t][0];
+                    this.mv.qty = t === 'ajuste' ? (this.mv.product ? this.mv.product.stock : 0) : 1;
+                    this.$nextTick(() => { const el = this.$refs.mvQty; if (el) { el.focus(); el.select(); } });
                 },
 
-                async fillBottles() {
-                    if (!this.fillForm.sizeLiters) { showToast('Seleccione el tipo de botellón', 'warning'); return; }
-                    if (!this.fillForm.quantity || this.fillForm.quantity <= 0) { showToast('Ingrese una cantidad válida', 'warning'); return; }
-                    if (!this.fillForm.tankId) { showToast('Seleccione un tanque de origen', 'warning'); return; }
+                stepQty(d) {
+                    const current = Number(this.mv.qty) || 0;
+                    this.mv.qty = Math.max(0, current + d);
+                },
 
-                    const tank = this.tanks.find(t => t.id === this.fillForm.tankId);
-                    const waterNeeded = this.fillForm.quantity * parseInt(this.fillForm.sizeLiters);
+                get mvReasons() { return MOVEMENT_REASONS[this.mv.type] || []; },
 
-                    if (waterNeeded > tank.current_liters) {
-                        showToast(`Agua insuficiente en el tanque. Disponible: ${tank.current_liters}L`, 'error');
-                        return;
+                get mvQtyNumber() { return Number(this.mv.qty); },
+
+                get mvNewStock() {
+                    const p = this.mv.product;
+                    if (!p) return 0;
+                    const q = this.mvQtyNumber;
+                    if (isNaN(q)) return p.stock;
+                    if (this.mv.type === 'entrada') return p.stock + q;
+                    if (this.mv.type === 'salida') return p.stock - q;
+                    return q;
+                },
+
+                get mvError() {
+                    const p = this.mv.product;
+                    if (!p) return '';
+                    const q = this.mvQtyNumber;
+                    if (this.mv.qty === '' || isNaN(q) || !Number.isInteger(q)) return 'Ingresa una cantidad válida (número entero).';
+                    if (this.mv.type !== 'ajuste' && q < 1) return 'La cantidad debe ser al menos 1.';
+                    if (this.mv.type === 'salida' && q > p.stock) return `Solo hay ${p.stock} unidades en stock.`;
+                    if (this.mv.type === 'ajuste' && q < 0) return 'El conteo no puede ser negativo.';
+                    if (this.mv.type === 'ajuste' && q === p.stock) return 'El conteo coincide con el stock actual.';
+                    return '';
+                },
+
+                async submitMovement() {
+                    if (this.processing) return;
+                    const err = this.mvError;
+                    if (err) { showToast(err, 'warning'); return; }
+
+                    const p = this.mv.product;
+                    const type = this.mv.type;
+                    const qty = this.mvQtyNumber;
+                    const newStock = this.mvNewStock;
+
+                    if (type !== 'entrada') {
+                        const verb = type === 'salida' ? `Descontar ${qty} unidad(es)` : `Ajustar el stock a ${qty}`;
+                        const ok = await showConfirm(type === 'salida' ? 'Confirmar salida' : 'Confirmar ajuste', `
+                            <div class="text-left space-y-2">
+                                <p><strong>Producto:</strong> ${escapeHtml(p.product_name)}</p>
+                                <p><strong>${verb}</strong> · ${escapeHtml(this.mv.reason)}</p>
+                                <div class="bg-amber-50 p-3 rounded-lg mt-2">
+                                    <p class="font-bold text-amber-700">Stock: ${p.stock} → ${newStock}</p>
+                                </div>
+                            </div>`, 'Confirmar', 'Cancelar');
+                        if (!ok) return;
                     }
-
-                    const newLevel = tank.current_liters - waterNeeded;
-                    const confirmed = await showConfirm('Confirmar Llenado', `
-                        <div class="text-left space-y-2">
-                            <p><strong>Botellones:</strong> ${this.fillForm.quantity} x ${this.fillForm.sizeLiters}L</p>
-                            <p><strong>Agua requerida:</strong> ${waterNeeded.toLocaleString()}L</p>
-                            <p><strong>Tanque:</strong> ${tank.name}</p>
-                            <div class="bg-yellow-50 p-3 rounded-lg mt-2">
-                                <p class="font-bold text-yellow-600">Nuevo nivel: ${newLevel.toLocaleString()}L</p>
-                            </div>
-                        </div>`, 'Confirmar Llenado', 'Cancelar');
-
-                    if (!confirmed) return;
 
                     this.processing = true;
                     try {
-                        const { data: { session } } = await supabase.auth.getSession();
-                        const { error: updateError } = await supabase.from('tanks').update({
-                            current_liters: newLevel, updated_at: new Date().toISOString()
-                        }).eq('id', this.fillForm.tankId);
-                        if (updateError) throw updateError;
-
-                        const { error: logError } = await supabase.from('tank_logs').insert({
-                            tank_id: this.fillForm.tankId, change_type: 'bottle_filling', liters_changed: -waterNeeded,
-                            previous_level: tank.current_liters, new_level: newLevel,
-                            notes: `Llenado de ${this.fillForm.quantity} botellones de ${this.fillForm.sizeLiters}L`, created_by: session.user.id
+                        const { data, error } = await supabase.rpc('adjust_stock', {
+                            p_product_id: p.product_id,
+                            p_branch: this.branch,
+                            p_type: type,
+                            p_quantity: qty,
+                            p_reason: this.mv.reason || null,
+                            p_notes: String(this.mv.notes || '').trim() || null
                         });
-                        if (logError) console.warn('Error registrando log:', logError);
-
-                        const { error: fillingError } = await supabase.from('bottle_filling').insert({
-                            branch: this.selectedBranch === 'all' ? this.userBranch : this.selectedBranch,
-                            product_id: null, quantity_filled: this.fillForm.quantity,
-                            water_used_liters: waterNeeded, tank_id: this.fillForm.tankId, filled_by: session.user.id
-                        });
-                        if (fillingError) console.warn('Error registrando llenado:', fillingError);
-
-                        showToast(`${this.fillForm.quantity} botellones de ${this.fillForm.sizeLiters}L llenados`, 'success');
-                        this.closeFillBottlesModal();
-                        await this.refreshInventory();
-                    } catch (err) {
-                        console.error('Error llenando botellones:', err);
-                        showToast('Error al llenar botellones: ' + err.message, 'error');
+                        if (error) throw error;
+                        showToast(`${p.product_name}: ${data.stock_before} → ${data.stock_after} unidades`, 'success');
+                        this.closeMovement();
+                        await this.refresh();
+                    } catch (e) {
+                        this.handleError(e, 'No se pudo registrar el movimiento');
                     } finally {
                         this.processing = false;
                     }
+                },
+
+                // =====================================================
+                // Historial de un producto
+                // =====================================================
+                async openHistory(p) {
+                    this.history = { open: true, product: p, rows: [], loading: true };
+                    try {
+                        const { data, error } = await supabase.from('inventory_movements')
+                            .select('id, movement_type, quantity, stock_before, stock_after, reason, notes, created_at, created_by')
+                            .eq('product_id', p.product_id)
+                            .eq('branch', this.branch)
+                            .order('created_at', { ascending: false })
+                            .limit(100);
+                        if (error) throw error;
+                        this.history.rows = await this.attachUserNames(data || []);
+                    } catch (err) {
+                        this.handleError(err, 'No se pudo cargar el historial');
+                    } finally {
+                        this.history.loading = false;
+                    }
+                },
+
+                // =====================================================
+                // Categorías
+                // =====================================================
+                openCategoriesModal() {
+                    if (!this.canManage) return;
+                    this.catModal = { open: true, newName: '', editingId: null, editName: '' };
+                },
+
+                async addCategory() {
+                    const name = this.catModal.newName.trim();
+                    if (!name) { showToast('Escribe el nombre de la categoría', 'warning'); return; }
+                    try {
+                        const { error } = await supabase.from('product_categories').insert({ name });
+                        if (error) throw error;
+                        this.catModal.newName = '';
+                        await this.loadCategories();
+                        showToast('Categoría creada', 'success');
+                    } catch (err) {
+                        if (err && err.code === '23505') showToast('Ya existe una categoría con ese nombre', 'warning');
+                        else this.handleError(err, 'No se pudo crear la categoría');
+                    }
+                },
+
+                startEditCategory(c) { this.catModal.editingId = c.id; this.catModal.editName = c.name; },
+
+                async saveCategoryName(c) {
+                    const name = this.catModal.editName.trim();
+                    if (!name) { showToast('El nombre no puede quedar vacío', 'warning'); return; }
+                    if (name === c.name) { this.catModal.editingId = null; return; }
+                    try {
+                        const { error } = await supabase.from('product_categories').update({ name }).eq('id', c.id);
+                        if (error) throw error;
+                        this.catModal.editingId = null;
+                        await Promise.all([this.loadCategories(), this.loadProducts()]);
+                        showToast('Categoría renombrada', 'success');
+                    } catch (err) {
+                        if (err && err.code === '23505') showToast('Ya existe una categoría con ese nombre', 'warning');
+                        else this.handleError(err, 'No se pudo renombrar');
+                    }
+                },
+
+                async toggleCategory(c) {
+                    try {
+                        const { error } = await supabase.from('product_categories').update({ is_active: !c.is_active }).eq('id', c.id);
+                        if (error) throw error;
+                        if (this.categoryFilter === c.id) this.categoryFilter = 'all';
+                        await this.loadCategories();
+                    } catch (err) {
+                        this.handleError(err, 'No se pudo actualizar la categoría');
+                    }
+                },
+
+                // =====================================================
+                // Código no registrado: crear producto o asignar a uno existente
+                // =====================================================
+                createFromUnknown() {
+                    const code = this.unknownModal.code;
+                    this.unknownModal.open = false;
+                    this.openProductModal(null, false, { barcode: code });
+                },
+
+                openAssignModal() {
+                    const code = this.unknownModal.code;
+                    this.unknownModal.open = false;
+                    this.assignModal = { open: true, code, search: '' };
+                    this.$nextTick(() => { if (this.$refs.assignSearch) this.$refs.assignSearch.focus(); });
+                },
+
+                get assignCandidates() {
+                    const q = this.assignModal.search.trim().toLowerCase();
+                    let list = this.activeProducts;
+                    if (q) list = list.filter(p => p.product_name.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q)));
+                    return list.slice().sort((a, b) => (a.barcode ? 1 : 0) - (b.barcode ? 1 : 0) || a.product_name.localeCompare(b.product_name, 'es', { sensitivity: 'base' })).slice(0, 40);
+                },
+
+                async confirmAssign(p) {
+                    const code = this.assignModal.code;
+                    const replacing = p.barcode ? `<p class="text-amber-700 text-sm">Este producto ya tiene el código <span class="font-mono">${escapeHtml(p.barcode)}</span>; se reemplazará.</p>` : '';
+                    const ok = await showConfirm('Asignar código de barras', `
+                        <div class="text-left space-y-2">
+                            <p><strong>Producto:</strong> ${escapeHtml(p.product_name)}</p>
+                            <p><strong>Código:</strong> <span class="font-mono">${escapeHtml(code)}</span></p>
+                            ${replacing}
+                        </div>`, 'Asignar', 'Cancelar');
+                    if (!ok) return;
+                    this.processing = true;
+                    try {
+                        const { error } = await supabase.rpc('assign_barcode', { p_product_id: p.product_id, p_barcode: code });
+                        if (error) throw error;
+                        showToast(`Código asignado a ${p.product_name}`, 'success');
+                        this.assignModal.open = false;
+                        await this.loadProducts();
+                    } catch (err) {
+                        this.handleError(err, 'No se pudo asignar el código');
+                    } finally {
+                        this.processing = false;
+                    }
+                },
+
+                // =====================================================
+                // Exportar
+                // =====================================================
+                exportCsv() {
+                    const rows = this.filteredProducts;
+                    if (!rows.length) { showToast('No hay productos para exportar', 'warning'); return; }
+                    const esc = v => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
+                    const lines = [['Producto', 'Categoría', 'Código de barras', 'Precio (USD)', 'Stock', 'Stock mínimo', 'Estado'].map(esc).join(';')];
+                    rows.forEach(p => lines.push([
+                        p.product_name, p.category_name, p.barcode,
+                        p.price === null ? '' : p.price.toFixed(2),
+                        p.stock, p.min_stock, p.is_active ? 'Activo' : 'Inactivo'
+                    ].map(esc).join(';')));
+                    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `inventario-${new Date().toISOString().slice(0, 10)}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(a.href);
                 }
-            }
+            };
         }
     </script>
 </body>
