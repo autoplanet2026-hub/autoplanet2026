@@ -29,27 +29,13 @@
             font-family: 'Inter', sans-serif;
         }
 
+        /* Cifras alineadas en columnas (montos, cantidades) */
+        .tabular {
+            font-variant-numeric: tabular-nums;
+        }
+
         .gradient-bg {
             background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
-        }
-
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-        }
-
-        .card-hover {
-            transition: all 0.3s ease;
-        }
-
-        .card-hover:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
         }
 
         .sidebar-mobile {
@@ -86,10 +72,26 @@
                 display: none !important;
             }
         }
+
+        /* Barras de progreso: la única animación, responde a la carga de datos */
+        .bar-fill {
+            transition: width 0.6s ease;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .bar-fill, .sidebar-mobile {
+                transition: none;
+            }
+        }
+
+        button:focus-visible, a:focus-visible, select:focus-visible {
+            outline: 2px solid #0284c7;
+            outline-offset: 2px;
+        }
     </style>
 </head>
 
-<body class="bg-gray-50" x-data="dashboardApp()" x-init="initDashboard()">
+<body class="bg-slate-50 text-slate-800" x-data="dashboardApp()" x-init="initDashboard()">
 
     <!-- Overlay para móvil -->
     <div class="sidebar-overlay" :class="{ 'show': mobileMenuOpen }" @click="mobileMenuOpen = false"></div>
@@ -114,31 +116,15 @@
             <!--
                 CONTROL DE ACCESO POR ROL (sidebar)
                 ------------------------------------
-                Roles: 'admin', 'supervisor', 'vendedor' (y otros operativos como
-                'delivery'/'cajero'). Se usa x-show con userRole (mismo patrón ya
-                usado en el selector de sucursales del header) para ocultar del
-                DOM visual las opciones que no le corresponden a cada rol:
-                  - "Ventas": oculto para 'supervisor' (no vende, solo supervisa).
-                  - "Usuarios": visible para 'admin' y 'supervisor'.
-                  - "Precios Personalizados": visible SOLO para 'admin'.
-                userRole se carga de forma asíncrona en initDashboard() desde
-                profiles.role, por lo que estos enlaces permanecen ocultos
-                mientras loading = true y solo se muestran cuando el rol
-                confirmado cumple la condición.
-
-                IMPORTANTE: esto es solo control de UI/UX (evita que el usuario
-                vea o navegue a esas opciones por accidente). NO reemplaza la
-                validación de permisos en el backend: cada página restringida
-                (usuarios.html, precios-personalizados.html, ventas.html, etc.)
-                debe seguir validando el rol contra Supabase (profiles.role al
-                cargar la página) y las RLS policies deben reforzar lo mismo a
-                nivel de base de datos, ya que un usuario con conocimientos
-                técnicos podría acceder directamente a esas URLs.
+                - "Ventas": oculto para 'supervisor'.
+                - "Usuarios": visible para 'admin' y 'supervisor'.
+                - "Precios Personalizados": visible SOLO para 'admin'.
+                Esto es solo control de UI/UX. NO reemplaza la validación de permisos
+                en cada página (profiles.role) ni las RLS policies en Supabase.
             -->
             <nav class="space-y-2">
                 <a href="index.html" class="flex items-center space-x-3 px-4 py-3 bg-white bg-opacity-20 rounded-lg"><i
                         class="fas fa-home w-5"></i><span class="font-medium">Dashboard</span></a>
-                <!-- Ventas: no visible para supervisor (rol de supervisión, no de venta). -->
                 <!--<a href="ventas-cisternas.html" x-show="userBranch === 'geminis'"
                     class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition">
                     <i class="fas fa-truck w-5"></i><span>Cisternas</span>
@@ -158,7 +144,6 @@
                 <a href="gastos.html"
                     class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
                         class="fas fa-receipt w-5"></i><span>Gastos</span></a>
-                <!-- Usuarios: visible para admin y supervisor. Los vendedores no gestionan cuentas de usuario. -->
                 <a href="usuarios.html" x-show="userRole === 'admin' || userRole === 'supervisor'"
                     class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
                         class="fas fa-user-cog w-5"></i><span>Usuarios</span></a>
@@ -168,7 +153,6 @@
                 <a href="resumen-diario.html"
                     class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
                         class="fas fa-file-alt w-5"></i><span>Resumen Diario</span></a>
-                <!-- Precios Personalizados: solo visible para admin. Define condiciones comerciales por cliente. -->
                 <a href="precios-personalizados.html" x-show="userRole === 'admin'"
                     class="flex items-center space-x-3 px-4 py-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition"><i
                         class="fas fa-file-alt w-5"></i><span>Precios Personalizados</span></a>
@@ -190,20 +174,19 @@
     <div class="lg:ml-64 min-h-screen flex flex-col">
         <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
             <div class="flex items-center space-x-4">
-                <button @click="mobileMenuOpen = !mobileMenuOpen"
+                <button @click="mobileMenuOpen = !mobileMenuOpen" aria-label="Abrir menú"
                     class="menu-toggle lg:hidden text-gray-600 hover:text-gray-800">
                     <i class="fas fa-bars text-2xl"></i>
                 </button>
                 <div>
                     <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
-                    <!-- Fecha actual siempre en formato Caracas -->
                     <p class="text-sm text-gray-500" x-text="'Resumen del ' + formatDateLong(new Date())"></p>
                 </div>
             </div>
             <div class="flex items-center space-x-4">
-                <!-- Dropdown de Sucursales (ADMIN y SUPERVISOR) -->
+                <!-- Selector de sucursal (ADMIN y SUPERVISOR) -->
                 <div x-show="userRole === 'admin' || userRole === 'supervisor'" class="hidden md:block">
-                    <select x-model="selectedBranch" @change="refreshDashboard()"
+                    <select x-model="selectedBranch" @change="refreshDashboard()" aria-label="Sucursal"
                         class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm">
                         <option value="all">🌐 Todas las Sucursales (Consolidado)</option>
                         <template x-for="branch in availableBranches" :key="branch">
@@ -215,12 +198,12 @@
                 <div class="hidden md:flex items-center bg-blue-50 px-4 py-2 rounded-lg">
                     <i class="fas fa-dollar-sign text-green-600 mr-2"></i>
                     <span class="text-sm text-gray-600">Tasa: </span>
-                    <span class="text-sm font-bold text-blue-600 ml-1"
+                    <span class="text-sm font-bold text-blue-600 ml-1 tabular"
                         x-text="'Bs. ' + (parseFloat(exchangeRate) || 700.22).toFixed(2)"></span>
                 </div>
-                <button class="relative p-2 text-gray-400 hover:text-gray-600">
+                <button class="relative p-2 text-gray-400 hover:text-gray-600" aria-label="Notificaciones">
                     <i class="fas fa-bell text-xl"></i>
-                    <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                    <span x-show="lowStockCount > 0" class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
                 </button>
                 <button onclick="logout()"
                     class="flex items-center space-x-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition shadow-sm">
@@ -236,191 +219,235 @@
                 <p class="mt-4 text-gray-600">Cargando dashboard...</p>
             </div>
 
-            <div x-show="!loading">
-                <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                    <div class="bg-white rounded-2xl shadow-sm p-6 card-hover border-l-4 border-blue-500">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-sm text-gray-600 mb-1">Ventas Hoy</p>
-                                <p class="text-3xl font-bold text-gray-900" x-text="stats.todaySales"></p>
-                                <p class="text-xs text-gray-500 mt-2" x-show="stats.yesterdaySales > 0">
-                                    <i :class="getSalesTrendClass()"></i>
-                                    <span x-text="getSalesTrendText()"></span>
-                                </p>
-                            </div>
-                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-shopping-cart text-blue-600 text-xl"></i>
-                            </div>
+            <div x-show="!loading" x-cloak class="space-y-6">
+
+                <!-- Fila 1: indicadores del día -->
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm text-gray-500">Ventas de hoy</p>
+                            <span class="w-9 h-9 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+                                <i class="fas fa-shopping-cart"></i>
+                            </span>
                         </div>
+                        <p class="text-3xl font-bold text-gray-900 mt-2 tabular" x-text="stats.todaySales"></p>
+                        <p class="text-xs mt-2" :class="salesTrend.cls">
+                            <i class="fas" :class="salesTrend.icon"></i>
+                            <span x-text="salesTrend.text"></span>
+                        </p>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-sm p-6 card-hover border-l-4 border-green-500">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-sm text-gray-600 mb-1">Ingresos Hoy</p>
-                                <p class="text-3xl font-bold text-gray-900"
-                                    x-text="'$' + stats.todayRevenue.toFixed(2)"></p>
-                                <p class="text-xs text-gray-500 mt-2">
-                                    <span
-                                        x-text="'Bs. ' + (stats.todayRevenue * (parseFloat(exchangeRate) || 700.22)).toFixed(2)"></span>
-                                </p>
-                            </div>
-                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-dollar-sign text-green-600 text-xl"></i>
-                            </div>
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm text-gray-500">Ingresos de hoy</p>
+                            <span class="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                <i class="fas fa-dollar-sign"></i>
+                            </span>
                         </div>
+                        <p class="text-3xl font-bold text-gray-900 mt-2 tabular" x-text="fmtUsd(stats.todayRevenue)"></p>
+                        <p class="text-xs text-gray-500 mt-2 tabular" x-text="fmtBs(stats.todayRevenue)"></p>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-sm p-6 card-hover border-l-4 border-cyan-500">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-sm text-gray-600 mb-1">Botellones Vendidos</p>
-                                <p class="text-3xl font-bold text-gray-900" x-text="stats.totalBottlesSold"></p>
-                                <p class="text-xs text-gray-500 mt-2" x-text="getBottlesBreakdown()"></p>
-                            </div>
-                            <div class="w-12 h-12 bg-cyan-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-tint text-cyan-600 text-xl"></i>
-                            </div>
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm text-gray-500">Piezas vendidas hoy</p>
+                            <span class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <i class="fas fa-cogs"></i>
+                            </span>
                         </div>
+                        <p class="text-3xl font-bold text-gray-900 mt-2 tabular" x-text="stats.unitsToday"></p>
+                        <p class="text-xs text-gray-500 mt-2 tabular"
+                            x-text="stats.todaySales > 0 ? (stats.unitsToday / stats.todaySales).toFixed(1) + ' piezas por venta' : 'Aún sin ventas hoy'">
+                        </p>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-sm p-6 card-hover border-l-4 border-red-500">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-sm text-gray-600 mb-1">Cuentas por Cobrar</p>
-                                <p class="text-3xl font-bold text-gray-900"
-                                    x-text="'$' + stats.creditAccounts.toFixed(2)"></p>
-                                <p class="text-xs text-red-600 mt-2">
-                                    <i class="fas fa-exclamation-circle"></i>
-                                    <span x-text="stats.creditCustomers + ' clientes'"></span>
-                                </p>
-                            </div>
-                            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-file-invoice-dollar text-red-600 text-xl"></i>
-                            </div>
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm text-gray-500">Cuentas por cobrar</p>
+                            <span class="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            </span>
                         </div>
+                        <p class="text-3xl font-bold text-gray-900 mt-2 tabular" x-text="fmtUsd(stats.creditAccounts)"></p>
+                        <p class="text-xs mt-2" :class="stats.creditCustomers > 0 ? 'text-rose-600' : 'text-gray-500'">
+                            <i class="fas fa-user-clock" x-show="stats.creditCustomers > 0"></i>
+                            <span
+                                x-text="stats.creditCustomers > 0 ? stats.creditCustomers + (stats.creditCustomers === 1 ? ' cliente con saldo' : ' clientes con saldo') : 'Sin saldos pendientes'"></span>
+                        </p>
                     </div>
                 </div>
 
-                <!-- Charts -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <div class="bg-white rounded-2xl shadow-sm p-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Ventas de la Semana</h3>
-                        <div style="position: relative; height: 200px;">
+                <!-- Fila 2: indicadores del mes e inventario -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Ingresos del mes</p>
+                            <p class="text-xl font-semibold text-gray-900 tabular" x-text="fmtUsd(stats.monthRevenue)"></p>
+                        </div>
+                        <p class="text-xs text-gray-500 text-right tabular" x-text="stats.monthSales + ' ventas'"></p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Ticket promedio del mes</p>
+                            <p class="text-xl font-semibold text-gray-900 tabular" x-text="fmtUsd(stats.avgTicket)"></p>
+                        </div>
+                        <p class="text-xs text-gray-500 text-right">por venta</p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Productos con stock bajo</p>
+                            <p class="text-xl font-semibold tabular"
+                                :class="lowStockCount > 0 ? 'text-amber-600' : 'text-gray-900'" x-text="lowStockCount"></p>
+                        </div>
+                        <a href="inventario.html" class="text-xs text-sky-700 hover:underline">Ver inventario</a>
+                    </div>
+                </div>
+
+                <!-- Gráficos -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 lg:col-span-2">
+                        <div class="flex items-baseline justify-between mb-4">
+                            <h3 class="text-base font-semibold text-gray-800">Ventas de la semana</h3>
+                            <p class="text-sm text-gray-500 tabular">
+                                <span x-text="fmtUsd(weekTotal)"></span> esta semana
+                            </p>
+                        </div>
+                        <div style="position: relative; height: 240px;">
                             <canvas id="salesChart"></canvas>
                         </div>
                     </div>
-                    <div class="bg-white rounded-2xl shadow-sm p-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Distribución por Producto</h3>
-                        <div style="position: relative; height: 200px;">
-                            <canvas id="productChart"></canvas>
+
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <h3 class="text-base font-semibold text-gray-800 mb-4">Ingresos por forma de pago</h3>
+                        <p class="text-xs text-gray-500 -mt-3 mb-3">Acumulado del mes</p>
+                        <div x-show="paymentTotal === 0" class="text-center py-10 text-gray-400">
+                            <i class="fas fa-wallet text-3xl mb-2"></i>
+                            <p class="text-sm">Aún no hay ventas completadas este mes</p>
+                        </div>
+                        <div x-show="paymentTotal > 0">
+                            <div style="position: relative; height: 150px;">
+                                <canvas id="paymentChart"></canvas>
+                            </div>
+                            <ul class="mt-4 space-y-2">
+                                <template x-for="(item, i) in paymentBreakdown" :key="item.label">
+                                    <li class="flex items-center justify-between text-sm">
+                                        <span class="flex items-center text-gray-600">
+                                            <span class="w-2.5 h-2.5 rounded-full mr-2"
+                                                :style="'background:' + chartColors[i % chartColors.length]"></span>
+                                            <span x-text="item.label"></span>
+                                        </span>
+                                        <span class="tabular text-gray-800">
+                                            <span x-text="fmtUsd(item.value)"></span>
+                                            <span class="text-gray-400 text-xs ml-1"
+                                                x-text="Math.round(item.value / paymentTotal * 100) + '%'"></span>
+                                        </span>
+                                    </li>
+                                </template>
+                            </ul>
                         </div>
                     </div>
                 </div>
 
-                <!-- Activity & Tanks -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white rounded-2xl shadow-sm p-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Actividad Reciente</h3>
-                        <div x-show="activityLoaded && recentActivity.length === 0"
-                            class="text-center py-8 text-gray-400">
-                            <i class="fas fa-history text-4xl mb-2"></i>
-                            <p>No hay actividad reciente</p>
+                <!-- Listados -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                    <!-- Actividad reciente -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <h3 class="text-base font-semibold text-gray-800 mb-4">Actividad reciente</h3>
+                        <div x-show="activityLoaded && recentActivity.length === 0" class="text-center py-8 text-gray-400">
+                            <i class="fas fa-history text-3xl mb-2"></i>
+                            <p class="text-sm">Las ventas que registres aparecerán aquí</p>
                         </div>
-                        <div class="space-y-3">
+                        <ul class="divide-y divide-gray-100">
                             <template x-for="activity in recentActivity" :key="activity.id">
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-10 h-10 rounded-full flex items-center justify-center" :class="{
-                                                'bg-green-100': activity.type === 'sale',
-                                                'bg-blue-100': activity.type === 'delivery',
-                                                'bg-yellow-100': activity.type === 'low_stock',
-                                                'bg-purple-100': activity.type === 'new_customer'
-                                            }">
-                                            <i :class="{
-                                                'fas fa-check text-green-600': activity.type === 'sale',
-                                                'fas fa-truck text-blue-600': activity.type === 'delivery',
-                                                'fas fa-exclamation text-yellow-600': activity.type === 'low_stock',
-                                                'fas fa-user-plus text-purple-600': activity.type === 'new_customer'
-                                            }"></i>
-                                        </div>
-                                        <div>
-                                            <p class="font-medium text-gray-900 text-sm" x-text="activity.title"></p>
-                                            <p class="text-xs text-gray-500" x-text="activity.description"></p>
+                                <li class="flex items-center justify-between py-3 gap-3">
+                                    <div class="flex items-center gap-3 min-w-0">
+                                        <span
+                                            class="w-9 h-9 shrink-0 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                            <i class="fas fa-check text-sm"></i>
+                                        </span>
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-medium text-gray-900 truncate"
+                                                x-text="activity.customer"></p>
+                                            <p class="text-xs text-gray-500 truncate" x-text="activity.description"></p>
                                         </div>
                                     </div>
-                                    <div class="text-right">
-                                        <p class="font-semibold text-sm" :class="{
-                                                'text-green-600': activity.type === 'sale',
-                                                'text-blue-600': activity.type === 'delivery',
-                                                'text-yellow-600': activity.type === 'low_stock',
-                                                'text-purple-600': activity.type === 'new_customer'
-                                            }" x-text="activity.amount || activity.status"></p>
+                                    <div class="text-right shrink-0">
+                                        <p class="text-sm font-semibold text-emerald-600 tabular" x-text="activity.amount"></p>
                                         <p class="text-xs text-gray-500" x-text="activity.time"></p>
                                     </div>
-                                </div>
+                                </li>
                             </template>
-                        </div>
+                        </ul>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-sm p-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                            <i class="fas fa-database text-blue-500 mr-2"></i>
-                            Tanques de Almacenamiento
-                        </h3>
-                        <div x-show="tanksLoaded && tanks.length === 0" class="text-center py-8 text-gray-400">
-                            <i class="fas fa-database text-4xl mb-2"></i>
-                            <p>No hay tanques registrados</p>
+                    <!-- Más vendidos -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <h3 class="text-base font-semibold text-gray-800">Productos más vendidos</h3>
+                        <p class="text-xs text-gray-500 mb-4">Piezas vendidas en el mes</p>
+                        <div x-show="itemsLoaded && topProducts.length === 0" class="text-center py-8 text-gray-400">
+                            <i class="fas fa-chart-bar text-3xl mb-2"></i>
+                            <p class="text-sm">Sin ventas este mes</p>
                         </div>
-                        <div class="space-y-4">
-                            <template x-for="tank in tanks" :key="tank.id">
-                                <div class="border border-gray-200 rounded-xl p-4">
-                                    <div class="flex justify-between items-start mb-3">
-                                        <div>
-                                            <h4 class="font-semibold text-gray-800" x-text="tank.name"></h4>
-                                            <p class="text-sm text-gray-500"
-                                                x-text="'Capacidad: ' + tank.capacity_liters.toLocaleString() + 'L'">
-                                            </p>
-                                        </div>
-                                        <span class="px-3 py-1 rounded-full text-xs font-semibold" :class="{
-                                                'bg-green-100 text-green-800': tank.percentage > 70,
-                                                'bg-yellow-100 text-yellow-800': tank.percentage > 40 && tank.percentage <= 70,
-                                                'bg-red-100 text-red-800': tank.percentage <= 40
-                                            }" x-text="tank.percentage + '%'"></span>
+                        <ul class="space-y-4">
+                            <template x-for="product in topProducts" :key="product.name">
+                                <li>
+                                    <div class="flex items-center justify-between text-sm mb-1.5 gap-3">
+                                        <span class="text-gray-800 truncate" x-text="product.name"></span>
+                                        <span class="font-semibold text-gray-900 tabular shrink-0"
+                                            x-text="product.quantity"></span>
                                     </div>
-                                    <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
-                                        <div class="h-3 rounded-full transition-all duration-500" :class="{
-                                                'bg-gradient-to-r from-blue-400 to-blue-600': tank.percentage > 70,
-                                                'bg-gradient-to-r from-yellow-400 to-yellow-600': tank.percentage > 40 && tank.percentage <= 70,
-                                                'bg-gradient-to-r from-red-400 to-red-600': tank.percentage <= 40
-                                            }" :style="'width: ' + tank.percentage + '%'"></div>
+                                    <div class="w-full bg-gray-100 rounded-full h-2">
+                                        <div class="bar-fill h-2 rounded-full bg-sky-500"
+                                            :style="'width:' + product.percent + '%'"></div>
                                     </div>
-                                    <div class="flex justify-between text-sm">
-                                        <span class="text-gray-600"
-                                            x-text="tank.current_liters.toLocaleString() + 'L disponibles'"></span>
-                                        <span class="font-semibold" :class="{
-                                                'text-blue-600': tank.percentage > 70,
-                                                'text-yellow-600': tank.percentage > 40 && tank.percentage <= 70,
-                                                'text-red-600': tank.percentage <= 40
-                                            }"
-                                            x-text="(tank.capacity_liters - tank.current_liters).toLocaleString() + 'L usados'"></span>
-                                    </div>
-                                    <div x-show="tank.current_liters < tank.min_level"
-                                        class="mt-2 text-xs text-red-600">
-                                        <i class="fas fa-exclamation-triangle mr-1"></i>
-                                        Nivel bajo - Mínimo: <span x-text="tank.min_level + 'L'"></span>
-                                    </div>
-                                </div>
+                                </li>
                             </template>
+                        </ul>
+                    </div>
+
+                    <!-- Stock bajo -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                        <div class="flex items-baseline justify-between">
+                            <h3 class="text-base font-semibold text-gray-800">Reposición necesaria</h3>
+                            <a href="inventario.html" class="text-xs text-sky-700 hover:underline">Ver todo</a>
                         </div>
+                        <p class="text-xs text-gray-500 mb-4">Productos en o por debajo del mínimo</p>
+
+                        <div x-show="stockLoaded && stockUnavailable" class="text-center py-8 text-gray-400">
+                            <i class="fas fa-boxes text-3xl mb-2"></i>
+                            <p class="text-sm">No se pudo leer el stock de los productos</p>
+                            <p class="text-xs mt-1">Revisa los nombres de columna en STOCK_COLUMNS</p>
+                        </div>
+                        <div x-show="stockLoaded && !stockUnavailable && lowStockList.length === 0"
+                            class="text-center py-8 text-gray-400">
+                            <i class="fas fa-circle-check text-3xl mb-2 text-emerald-400"></i>
+                            <p class="text-sm">Todo el inventario está sobre el mínimo</p>
+                        </div>
+                        <ul class="divide-y divide-gray-100">
+                            <template x-for="p in lowStockList" :key="p.id">
+                                <li class="flex items-center justify-between py-3 gap-3">
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-medium text-gray-900 truncate" x-text="p.name"></p>
+                                        <p class="text-xs text-gray-500 tabular"
+                                            x-text="'Mínimo: ' + p.min"></p>
+                                    </div>
+                                    <div class="text-right shrink-0">
+                                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold tabular"
+                                            :class="p.stock <= 0 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'"
+                                            x-text="p.stock <= 0 ? 'Agotado' : p.stock + ' en stock'"></span>
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
                     </div>
                 </div>
             </div>
         </main>
 
         <footer class="bg-white border-t px-6 py-4 text-center text-sm text-gray-500">
-            <p>&copy; 2026 AquaService. Todos los derechos reservados.</p>
+            <p>&copy; 2026 Auto Servicio. Todos los derechos reservados.</p>
         </footer>
     </div>
 
@@ -428,6 +455,25 @@
         const SUPABASE_URL = 'https://xasdwtlspuexreyqtifp.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhhc2R3dGxzcHVleHJleXF0aWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyODQ2MDksImV4cCI6MjExMDg2MDYwOX0.BYffuy97T_-Ri_ckBmtodUtPCehhFpF4IJoE6DaXSyM';
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ============================================
+        // CONFIGURACIÓN (ajusta estos valores a tu base de datos)
+        // ============================================
+
+        // Nombres posibles de las columnas de stock y de stock mínimo en la tabla "products".
+        // Se usa el primero que exista en cada producto.
+        const STOCK_COLUMNS = ['stock', 'stock_quantity', 'quantity', 'current_stock'];
+        const MIN_STOCK_COLUMNS = ['min_stock', 'stock_min', 'min_level', 'minimum_stock'];
+        const DEFAULT_MIN_STOCK = 5; // se usa si el producto no tiene mínimo definido
+
+        // Ventas con estos estados no cuentan en el dashboard
+        const EXCLUDED_STATUSES = ['cancelled', 'canceled', 'anulada', 'anulado'];
+
+        // Nombres legibles para las formas de pago
+        const PAYMENT_LABELS = {
+            efectivo: 'Efectivo', credito: 'Crédito', transferencia: 'Transferencia',
+            pago_movil: 'Pago móvil', punto: 'Punto de venta', zelle: 'Zelle', divisas: 'Divisas'
+        };
 
         async function logout() {
             try {
@@ -453,41 +499,67 @@
         }
 
         // ============================================
-        // UTILIDADES DE FECHA - ZONA HORARIA CARACAS
+        // UTILIDADES DE FECHA - ZONA HORARIA CARACAS (UTC-4, sin horario de verano)
+        // Se trabaja con fechas "YYYY-MM-DD" de Caracas y se convierten a ISO con
+        // el desfase explícito, para que no dependan de la zona del navegador.
         // ============================================
         const DateUtils = {
             TIMEZONE: 'America/Caracas',
 
-            getStartOfDay(date) {
-                const caracasDate = new Date(date.toLocaleString('en-US', { timeZone: this.TIMEZONE }));
-                caracasDate.setHours(0, 0, 0, 0);
-                return caracasDate.toISOString();
+            ymd(date = new Date()) {
+                return new Intl.DateTimeFormat('en-CA', {
+                    timeZone: this.TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit'
+                }).format(date);
             },
 
-            getEndOfDay(date) {
-                const caracasDate = new Date(date.toLocaleString('en-US', { timeZone: this.TIMEZONE }));
-                caracasDate.setHours(23, 59, 59, 999);
-                return caracasDate.toISOString();
+            startISO(ymd) {
+                return new Date(ymd + 'T00:00:00-04:00').toISOString();
+            },
+
+            add(ymd, days) {
+                const d = new Date(ymd + 'T12:00:00Z');
+                d.setUTCDate(d.getUTCDate() + days);
+                return d.toISOString().slice(0, 10);
+            },
+
+            // 0 = lunes ... 6 = domingo
+            weekdayIndex(ymd) {
+                return (new Date(ymd + 'T12:00:00Z').getUTCDay() + 6) % 7;
+            },
+
+            monday(ymd) {
+                return this.add(ymd, -this.weekdayIndex(ymd));
             },
 
             formatDateLong(date) {
                 return new Intl.DateTimeFormat('es-VE', {
-                    timeZone: this.TIMEZONE,
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
+                    timeZone: this.TIMEZONE, day: 'numeric', month: 'long', year: 'numeric'
                 }).format(date);
             }
         };
 
-        // Instancias de Chart.js FUERA del estado de Alpine (evita que Alpine las envuelva en proxies reactivos)
+        // Trae todas las filas de una consulta, página por página (Supabase limita a 1000 por defecto)
+        async function fetchAll(makeQuery) {
+            const pageSize = 1000;
+            let from = 0;
+            let rows = [];
+            while (true) {
+                const { data, error } = await makeQuery().range(from, from + pageSize - 1);
+                if (error) throw error;
+                rows = rows.concat(data || []);
+                if (!data || data.length < pageSize || from > 50000) break;
+                from += pageSize;
+            }
+            return rows;
+        }
+
+        // Instancias de Chart.js FUERA del estado de Alpine (evita proxies reactivos)
         let salesChartInstance = null;
-        let productChartInstance = null;
+        let paymentChartInstance = null;
 
         function dashboardApp() {
             return {
                 mobileMenuOpen: false,
-                currentPage: 'dashboard',
                 loading: true,
                 userName: '',
                 userRole: '',
@@ -495,37 +567,53 @@
                 userInitials: '??',
                 exchangeRate: 700.22,
 
-                // Control de sucursales
                 selectedBranch: 'all',
                 availableBranches: [],
 
-                // Evitan mostrar "No hay actividad/tanques" mientras todavía se están cargando
                 activityLoaded: false,
-                tanksLoaded: false,
+                itemsLoaded: false,
+                stockLoaded: false,
+
+                chartColors: ['#0ea5e9', '#6366f1', '#10b981', '#f59e0b', '#06b6d4', '#94a3b8'],
 
                 stats: {
                     todaySales: 0,
                     yesterdaySales: 0,
                     todayRevenue: 0,
-                    totalBottlesSold: 0,
-                    bottlesBySize: { 5: 0, 13: 0, 20: 0 },
+                    yesterdayRevenue: 0,
+                    unitsToday: 0,
+                    monthRevenue: 0,
+                    monthSales: 0,
+                    avgTicket: 0,
                     creditAccounts: 0,
                     creditCustomers: 0
                 },
 
                 weeklySales: {
                     labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-                    data: [0, 0, 0, 0, 0, 0, 0]
+                    current: [0, 0, 0, 0, 0, 0, 0],
+                    previous: [0, 0, 0, 0, 0, 0, 0]
                 },
 
-                productDistribution: {
-                    labels: ['5 Litros', '13 Litros', '20 Litros'],
-                    data: [0, 0, 0]
-                },
-
+                paymentBreakdown: [],
+                topProducts: [],
                 recentActivity: [],
-                tanks: [],
+                lowStockList: [],
+                lowStockCount: 0,
+                stockUnavailable: false,
 
+                // ---------- Propiedades calculadas ----------
+                get salesTrend() {
+                    return this.trend(this.stats.todaySales, this.stats.yesterdaySales);
+                },
+                get weekTotal() {
+                    return this.weeklySales.current.reduce((a, b) => a + b, 0);
+                },
+                get paymentTotal() {
+                    return this.paymentBreakdown.reduce((a, b) => a + b.value, 0);
+                },
+
+                // ---------- Inicio ----------
                 async initDashboard() {
                     if (typeof alertify !== 'undefined') {
                         alertify.set('notifier', { position: 'top-right' });
@@ -547,25 +635,23 @@
                             this.userBranch = profile.branch;
                             this.userInitials = this.getInitials(profile.full_name);
 
-                            // ✅ CONSOLIDADO POR DEFECTO PARA ADMIN Y SUPERVISOR, SUCURSAL PARA VENDEDORES
+                            // Consolidado por defecto para admin y supervisor; su sucursal para el resto
                             this.selectedBranch = (profile.role === 'admin' || profile.role === 'supervisor') ? 'all' : profile.branch;
                         }
 
-                        // ⚡ Secundarias: se cargan en segundo plano, sin bloquear el dashboard
-                        const secondary = [this.loadRecentActivity(), this.loadTanks()];
+                        // Secundarias: se cargan en segundo plano
+                        const secondary = [this.loadRecentActivity(), this.loadTopProducts(), this.loadLowStock()];
                         if (this.userRole === 'admin' || this.userRole === 'supervisor') {
                             secondary.push(this.loadAvailableBranches());
                         }
 
-                        // ⚡ Críticas (tarjetas + gráficos): todo en paralelo, ya no una tras otra
+                        // Críticas (tarjetas + gráficos): en paralelo
                         await Promise.all([
                             this.loadExchangeRate(),
-                            this.loadTodayStats(),
-                            this.loadWeeklySales(),
+                            this.loadSalesOverview(),
                             this.loadCreditAccounts()
                         ]);
 
-                        // Mostrar el dashboard y crear los gráficos cuando los canvas ya son visibles
                         this.loading = false;
                         await this.$nextTick();
                         this.initCharts();
@@ -580,7 +666,6 @@
 
                 async loadAvailableBranches() {
                     try {
-                        // Consultamos profiles para obtener las sucursales registradas en el sistema
                         const { data, error } = await supabase
                             .from('profiles')
                             .select('branch')
@@ -594,14 +679,13 @@
                     }
                 },
 
-                // Se usa al cambiar de sucursal (los canvas ya están visibles)
                 async refreshDashboard() {
                     await Promise.all([
-                        this.loadTodayStats(),
-                        this.loadWeeklySales(),
+                        this.loadSalesOverview(),
                         this.loadCreditAccounts(),
                         this.loadRecentActivity(),
-                        this.loadTanks()
+                        this.loadTopProducts(),
+                        this.loadLowStock()
                     ]);
                     this.initCharts();
                 },
@@ -609,87 +693,146 @@
                 async loadExchangeRate() {
                     try {
                         const { data, error } = await supabase.rpc('get_active_exchange_rate');
-                        if (!error && data) {
-                            this.exchangeRate = ensureValidRate(data);
-                        } else {
-                            this.exchangeRate = 700.22;
-                        }
+                        this.exchangeRate = (!error && data) ? ensureValidRate(data) : 700.22;
                     } catch (err) {
                         this.exchangeRate = 700.22;
                     }
                 },
 
-                // ⚡ Las 3 consultas de hoy van en paralelo y la de sale_items se usa
-                // para las dos cosas: botellones vendidos y distribución por producto.
-                async loadTodayStats() {
+                // ---------- Ventas: hoy, ayer, semana, semana anterior y mes en UNA sola consulta ----------
+                async loadSalesOverview() {
                     try {
-                        const todayStr = DateUtils.getStartOfDay(new Date());
-                        const yesterday = new Date();
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        const yesterdayStr = DateUtils.getStartOfDay(yesterday);
+                        const today = DateUtils.ymd();
+                        const yesterday = DateUtils.add(today, -1);
+                        const weekStart = DateUtils.monday(today);
+                        const prevWeekStart = DateUtils.add(weekStart, -7);
+                        const monthStart = today.slice(0, 8) + '01';
+                        const earliest = prevWeekStart < monthStart ? prevWeekStart : monthStart;
 
-                        const byBranch = (q, column = 'branch') =>
-                            this.selectedBranch !== 'all' ? q.eq(column, this.selectedBranch) : q;
-
-                        const [{ data: todaySales }, { data: yesterdaySales }, { data: saleItems }] = await Promise.all([
-                            byBranch(supabase.from('sales').select('total, status, payment_method').gte('created_at', todayStr)),
-                            byBranch(supabase.from('sales').select('total').gte('created_at', yesterdayStr).lt('created_at', todayStr)),
-                            byBranch(
-                                supabase.from('sale_items')
-                                    .select(`quantity, products!inner(size_liters), sales!inner(branch, created_at)`)
-                                    .gte('sales.created_at', todayStr),
-                                'sales.branch'
-                            )
-                        ]);
-
-                        this.stats.todaySales = todaySales?.length || 0;
-                        this.stats.yesterdaySales = yesterdaySales?.length || 0;
-                        this.stats.todayRevenue = todaySales?.filter(s => s.status === 'completed').reduce((sum, s) => sum + s.total, 0) || 0;
-
-                        this.stats.totalBottlesSold = saleItems?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-                        const bySize = { 5: 0, 13: 0, 20: 0 };
-                        saleItems?.forEach(item => {
-                            const size = item.products.size_liters;
-                            if (bySize[size] !== undefined) bySize[size] += item.quantity;
+                        const sales = await fetchAll(() => {
+                            let q = supabase.from('sales')
+                                .select('total, status, payment_method, created_at')
+                                .gte('created_at', DateUtils.startISO(earliest))
+                                .order('created_at');
+                            if (this.selectedBranch !== 'all') q = q.eq('branch', this.selectedBranch);
+                            return q;
                         });
-                        this.stats.bottlesBySize = bySize;
-                        this.productDistribution.data = [bySize[5], bySize[13], bySize[20]];
 
+                        const s = {
+                            todaySales: 0, yesterdaySales: 0, todayRevenue: 0, yesterdayRevenue: 0,
+                            monthRevenue: 0, monthSales: 0
+                        };
+                        const current = [0, 0, 0, 0, 0, 0, 0];
+                        const previous = [0, 0, 0, 0, 0, 0, 0];
+                        const payments = {};
+
+                        sales.forEach(sale => {
+                            if (EXCLUDED_STATUSES.includes(sale.status)) return;
+                            const day = DateUtils.ymd(new Date(sale.created_at));
+                            const total = Number(sale.total) || 0;
+                            const completed = sale.status === 'completed';
+
+                            if (day === today) { s.todaySales++; if (completed) s.todayRevenue += total; }
+                            if (day === yesterday) { s.yesterdaySales++; if (completed) s.yesterdayRevenue += total; }
+
+                            if (!completed) return;
+
+                            if (day >= weekStart) current[DateUtils.weekdayIndex(day)] += total;
+                            else if (day >= prevWeekStart) previous[DateUtils.weekdayIndex(day)] += total;
+
+                            if (day >= monthStart) {
+                                s.monthRevenue += total;
+                                s.monthSales++;
+                                const key = sale.payment_method || 'otro';
+                                payments[key] = (payments[key] || 0) + total;
+                            }
+                        });
+
+                        Object.assign(this.stats, s);
+                        this.stats.avgTicket = s.monthSales > 0 ? s.monthRevenue / s.monthSales : 0;
+                        this.weeklySales.current = current;
+                        this.weeklySales.previous = previous;
+                        this.paymentBreakdown = Object.entries(payments)
+                            .map(([key, value]) => ({ label: this.paymentLabel(key), value }))
+                            .sort((a, b) => b.value - a.value);
                     } catch (err) {
-                        console.error('Error cargando estadísticas de hoy:', err);
+                        console.error('Error cargando ventas:', err);
                     }
                 },
 
-                async loadWeeklySales() {
+                // ---------- Piezas vendidas hoy + ranking de productos del mes ----------
+                async loadTopProducts() {
                     try {
-                        // Calcular el lunes de la semana actual en hora Caracas
-                        const now = new Date();
-                        const caracasDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Caracas' }));
+                        const today = DateUtils.ymd();
+                        const monthStart = today.slice(0, 8) + '01';
 
-                        const dayOfWeek = caracasDate.getDay() || 7; // 1 = Lunes, 7 = Domingo
-                        const monday = new Date(caracasDate);
-                        monday.setDate(caracasDate.getDate() - dayOfWeek + 1);
-                        monday.setHours(0, 0, 0, 0);
-
-                        let query = supabase.from('sales').select('total, created_at').gte('created_at', monday.toISOString()).eq('status', 'completed');
-                        if (this.selectedBranch !== 'all') {
-                            query = query.eq('branch', this.selectedBranch);
-                        }
-
-                        const { data: sales } = await query;
-                        const dailySales = [0, 0, 0, 0, 0, 0, 0];
-
-                        sales?.forEach(sale => {
-                            // Ajustar la fecha de la venta a Caracas para asignar el día correcto de la semana
-                            const saleDateCaracas = new Date(new Date(sale.created_at).toLocaleString('en-US', { timeZone: 'America/Caracas' }));
-                            const dayIndex = saleDateCaracas.getDay() || 7;
-                            dailySales[dayIndex - 1] += sale.total;
+                        const items = await fetchAll(() => {
+                            let q = supabase.from('sale_items')
+                                .select('quantity, products!inner(name), sales!inner(branch, created_at, status)')
+                                .gte('sales.created_at', DateUtils.startISO(monthStart))
+                                .order('id');
+                            if (this.selectedBranch !== 'all') q = q.eq('sales.branch', this.selectedBranch);
+                            return q;
                         });
 
-                        this.weeklySales.data = dailySales;
+                        let unitsToday = 0;
+                        const totals = {};
+                        items.forEach(item => {
+                            if (EXCLUDED_STATUSES.includes(item.sales.status)) return;
+                            const qty = Number(item.quantity) || 0;
+                            if (DateUtils.ymd(new Date(item.sales.created_at)) === today) unitsToday += qty;
+                            const name = item.products.name;
+                            totals[name] = (totals[name] || 0) + qty;
+                        });
 
+                        const ranking = Object.entries(totals)
+                            .map(([name, quantity]) => ({ name, quantity }))
+                            .sort((a, b) => b.quantity - a.quantity)
+                            .slice(0, 5);
+                        const max = ranking[0]?.quantity || 1;
+
+                        this.stats.unitsToday = unitsToday;
+                        this.topProducts = ranking.map(p => ({ ...p, percent: Math.max(4, Math.round(p.quantity / max * 100)) }));
                     } catch (err) {
-                        console.error('Error cargando ventas semanales:', err);
+                        console.error('Error cargando productos vendidos:', err);
+                    } finally {
+                        this.itemsLoaded = true;
+                    }
+                },
+
+                // ---------- Inventario con stock bajo ----------
+                async loadLowStock() {
+                    try {
+                        const products = await fetchAll(() => supabase.from('products').select('*').order('name'));
+                        const pick = (p, cols) => {
+                            for (const c of cols) if (p[c] !== undefined && p[c] !== null) return Number(p[c]);
+                            return NaN;
+                        };
+
+                        let readable = 0;
+                        const low = [];
+                        products.forEach(p => {
+                            if (p.is_active === false || p.active === false) return;
+                            // Si los productos tienen sucursal, respeta la seleccionada
+                            if (this.selectedBranch !== 'all' && p.branch && p.branch !== this.selectedBranch) return;
+
+                            const stock = pick(p, STOCK_COLUMNS);
+                            if (isNaN(stock)) return;
+                            readable++;
+                            const minRaw = pick(p, MIN_STOCK_COLUMNS);
+                            const min = isNaN(minRaw) ? DEFAULT_MIN_STOCK : minRaw;
+                            if (stock <= min) low.push({ id: p.id, name: p.name, stock, min });
+                        });
+
+                        low.sort((a, b) => a.stock - b.stock);
+                        this.stockUnavailable = products.length > 0 && readable === 0;
+                        this.lowStockCount = low.length;
+                        this.lowStockList = low.slice(0, 6);
+                    } catch (err) {
+                        console.error('Error cargando inventario:', err);
+                        this.stockUnavailable = true;
+                    } finally {
+                        this.stockLoaded = true;
                     }
                 },
 
@@ -701,9 +844,8 @@
                         }
 
                         const { data: creditSales } = await query;
-                        this.stats.creditAccounts = creditSales?.reduce((sum, s) => sum + s.total, 0) || 0;
+                        this.stats.creditAccounts = creditSales?.reduce((sum, s) => sum + (Number(s.total) || 0), 0) || 0;
                         this.stats.creditCustomers = new Set(creditSales?.map(s => s.customer_id)).size;
-
                     } catch (err) {
                         console.error('Error cargando cuentas por cobrar:', err);
                     }
@@ -711,21 +853,26 @@
 
                 async loadRecentActivity() {
                     try {
-                        let query = supabase.from('sales').select(`id, created_at, total, customer_name, sale_items!inner(quantity, products!inner(name))`).order('created_at', { ascending: false }).limit(5);
+                        let query = supabase.from('sales')
+                            .select(`id, created_at, total, customer_name, sale_items!inner(quantity, products!inner(name))`)
+                            .order('created_at', { ascending: false })
+                            .limit(6);
                         if (this.selectedBranch !== 'all') {
                             query = query.eq('branch', this.selectedBranch);
                         }
 
                         const { data: sales } = await query;
-                        this.recentActivity = sales?.map(sale => ({
-                            id: sale.id,
-                            type: 'sale',
-                            title: 'Venta completada',
-                            description: `${sale.customer_name || 'Cliente'} - ${sale.sale_items[0]?.quantity} ${sale.sale_items[0]?.products.name}`,
-                            amount: '+$' + sale.total.toFixed(2),
-                            time: this.getTimeAgo(sale.created_at)
-                        })) || [];
-
+                        this.recentActivity = sales?.map(sale => {
+                            const first = sale.sale_items[0];
+                            const extra = sale.sale_items.length - 1;
+                            return {
+                                id: sale.id,
+                                customer: sale.customer_name || 'Cliente no registrado',
+                                description: `${first?.quantity} × ${first?.products.name}` + (extra > 0 ? ` y ${extra} más` : ''),
+                                amount: '+' + this.fmtUsd(sale.total),
+                                time: this.getTimeAgo(sale.created_at)
+                            };
+                        }) || [];
                     } catch (err) {
                         console.error('Error cargando actividad reciente:', err);
                     } finally {
@@ -733,28 +880,8 @@
                     }
                 },
 
-                async loadTanks() {
-                    try {
-                        let query = supabase.from('tanks').select('*').order('name');
-                        if (this.selectedBranch !== 'all') {
-                            query = query.eq('branch', this.selectedBranch);
-                        }
-
-                        const { data: tanks } = await query;
-                        this.tanks = tanks?.map(tank => ({
-                            ...tank,
-                            percentage: Math.round((tank.current_liters / tank.capacity_liters) * 100)
-                        })) || [];
-
-                    } catch (err) {
-                        console.error('Error cargando tanques:', err);
-                    } finally {
-                        this.tanksLoaded = true;
-                    }
-                },
-
+                // ---------- Gráficos ----------
                 initCharts() {
-                    // Se pasan copias planas de los arrays para que Chart.js no reciba proxies de Alpine
                     const salesCtx = document.getElementById('salesChart');
                     if (salesCtx) {
                         if (salesChartInstance) salesChartInstance.destroy();
@@ -762,44 +889,88 @@
                             type: 'line',
                             data: {
                                 labels: [...this.weeklySales.labels],
-                                datasets: [{
-                                    label: 'Ventas ($)',
-                                    data: [...this.weeklySales.data],
-                                    borderColor: '#0ea5e9',
-                                    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-                                    tension: 0.4, fill: true, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5
-                                }]
+                                datasets: [
+                                    {
+                                        label: 'Esta semana',
+                                        data: [...this.weeklySales.current],
+                                        borderColor: '#0ea5e9',
+                                        backgroundColor: 'rgba(14, 165, 233, 0.08)',
+                                        tension: 0.35, fill: true, borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5
+                                    },
+                                    {
+                                        label: 'Semana anterior',
+                                        data: [...this.weeklySales.previous],
+                                        borderColor: '#94a3b8',
+                                        borderDash: [5, 5],
+                                        tension: 0.35, fill: false, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4
+                                    }
+                                ]
                             },
                             options: {
                                 responsive: true, maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16, font: { size: 11 } } },
+                                    tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}` } }
+                                },
                                 scales: {
-                                    y: { beginAtZero: true, ticks: { callback: function (value) { return '$' + value; } }, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                                    y: { beginAtZero: true, ticks: { callback: v => '$' + v }, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
                                     x: { grid: { display: false } }
                                 }
                             }
                         });
                     }
 
-                    const productCtx = document.getElementById('productChart');
-                    if (productCtx) {
-                        if (productChartInstance) productChartInstance.destroy();
-                        productChartInstance = new Chart(productCtx, {
+                    const paymentCtx = document.getElementById('paymentChart');
+                    if (paymentChartInstance) { paymentChartInstance.destroy(); paymentChartInstance = null; }
+                    if (paymentCtx && this.paymentTotal > 0) {
+                        paymentChartInstance = new Chart(paymentCtx, {
                             type: 'doughnut',
                             data: {
-                                labels: [...this.productDistribution.labels],
+                                labels: this.paymentBreakdown.map(p => p.label),
                                 datasets: [{
-                                    data: [...this.productDistribution.data],
-                                    backgroundColor: ['#06b6d4', '#0ea5e9', '#0284c7'],
-                                    borderWidth: 0, cutout: '70%'
+                                    data: this.paymentBreakdown.map(p => p.value),
+                                    backgroundColor: this.paymentBreakdown.map((_, i) => this.chartColors[i % this.chartColors.length]),
+                                    borderWidth: 2, borderColor: '#ffffff'
                                 }]
                             },
                             options: {
-                                responsive: true, maintainAspectRatio: false,
-                                plugins: { legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } } }
+                                responsive: true, maintainAspectRatio: false, cutout: '68%',
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: { callbacks: { label: ctx => ` ${ctx.label}: $${ctx.parsed.toFixed(2)}` } }
+                                }
                             }
                         });
                     }
+                },
+
+                // ---------- Utilidades de formato ----------
+                paymentLabel(key) {
+                    if (PAYMENT_LABELS[key]) return PAYMENT_LABELS[key];
+                    const text = String(key).replace(/_/g, ' ');
+                    return text.charAt(0).toUpperCase() + text.slice(1);
+                },
+
+                fmtUsd(n) {
+                    return '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+
+                fmtBs(n) {
+                    const rate = parseFloat(this.exchangeRate) || 700.22;
+                    return 'Bs. ' + ((Number(n) || 0) * rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+
+                trend(current, previous) {
+                    if (!previous) {
+                        return current > 0
+                            ? { text: 'Sin ventas ayer', icon: 'fa-minus', cls: 'text-gray-500' }
+                            : { text: 'Sin movimiento aún', icon: 'fa-minus', cls: 'text-gray-500' };
+                    }
+                    const pct = Math.round((current - previous) / previous * 100);
+                    if (pct > 0) return { text: `${pct}% más que ayer`, icon: 'fa-arrow-up', cls: 'text-emerald-600' };
+                    if (pct < 0) return { text: `${Math.abs(pct)}% menos que ayer`, icon: 'fa-arrow-down', cls: 'text-rose-600' };
+                    return { text: 'Igual que ayer', icon: 'fa-minus', cls: 'text-gray-500' };
                 },
 
                 getInitials(name) {
@@ -817,23 +988,6 @@
                     return `Hace ${diffDays} día${diffDays > 1 ? 's' : ''}`;
                 },
 
-                getSalesTrendClass() {
-                    if (this.stats.todaySales > this.stats.yesterdaySales) return 'fas fa-arrow-up text-green-600';
-                    if (this.stats.todaySales < this.stats.yesterdaySales) return 'fas fa-arrow-down text-red-600';
-                    return 'fas fa-minus text-gray-600';
-                },
-
-                getSalesTrendText() {
-                    if (this.stats.yesterdaySales === 0) return 'Sin ventas ayer';
-                    const change = ((this.stats.todaySales - this.stats.yesterdaySales) / this.stats.yesterdaySales * 100).toFixed(0);
-                    return `${Math.abs(change)}% vs ayer`;
-                },
-
-                getBottlesBreakdown() {
-                    const { 5: five, 13: thirteen, 20: twenty } = this.stats.bottlesBySize;
-                    return `5L: ${five} | 13L: ${thirteen} | 20L: ${twenty}`;
-                },
-
                 formatDateLong(date) {
                     return DateUtils.formatDateLong(date);
                 }
@@ -841,7 +995,7 @@
         }
 
     </script>
-		
+
 </body>
 
 </html>
