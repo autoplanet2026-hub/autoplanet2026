@@ -575,7 +575,8 @@
                 </button>
             </div>
 
-            <div class="p-6 space-y-6" x-show="selectedAccount">
+            <template x-if="selectedAccount">
+            <div class="p-6 space-y-6">
                 <div class="bg-blue-50 rounded-xl p-4">
                     <h4 class="font-semibold text-blue-900 mb-3"><i class="fas fa-user mr-2"></i>Información del Cliente
                     </h4>
@@ -702,6 +703,7 @@
                     </div>
                 </div>
             </div>
+            </template>
 
             <div class="px-6 py-4 border-t bg-gray-50 flex justify-end space-x-3 sticky bottom-0">
                 <button @click="showViewModal = false"
@@ -1417,6 +1419,7 @@
 
                 openPaymentModal(account) {
                     this.selectedAccount = account;
+                    this.showViewModal = false;
                     this.paymentForm = { amount: 0, payment_method: 'efectivo', reference: '', notes: '' };
                     this.paymentNotesAuto = true;
                     this.showPaymentModal = true;
