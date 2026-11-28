@@ -1154,7 +1154,7 @@
                         };
 
                         doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-                        doc.text('SERVICIOS AGUA POTABLE', 148, 15, { align: 'center' });
+                        doc.text('AUTOPLANET', 148, 15, { align: 'center' });
                         doc.setFontSize(11);
                         doc.text('REPORTE DE CUENTAS POR COBRAR', 148, 21, { align: 'center' });
                         doc.setFontSize(8); doc.setFont('helvetica', 'normal');
@@ -1238,7 +1238,7 @@
                         }
 
                         const workbook = new ExcelJS.Workbook();
-                        workbook.creator = 'Servicios Agua Potable';
+                        workbook.creator = 'Autoplanet';
                         workbook.created = new Date();
 
                         const colores = {
@@ -1262,7 +1262,7 @@
                         const lastCol = esCancelado ? 'M' : 'L';
 
                         ws.mergeCells(`A1:${lastCol}1`);
-                        ws.getCell('A1').value = '💧 SERVICIOS AGUA POTABLE - CUENTAS POR COBRAR';
+                        ws.getCell('A1').value = '💧 AUTOPLANET - CUENTAS POR COBRAR';
                         ws.getCell('A1').font = { name: 'Calibri', size: 14, bold: true, color: { argb: colores.blanco } };
                         ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colores.azulMedio } };
                         ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
